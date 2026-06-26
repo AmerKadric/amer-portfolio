@@ -29,11 +29,6 @@ export default function Hero() {
 
           {/* Left: Text content */}
           <div className="flex-1 text-center lg:text-left">
-            {/* Status badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-cyan-400/20 bg-cyan-400/5 text-cyan-400 text-xs font-medium mb-6 animate-fade-in">
-              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse-slow" />
-              Open to opportunities
-            </div>
 
             <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-white mb-4 leading-tight opacity-0 animate-fade-up"
               style={{ animationFillMode: 'forwards' }}>

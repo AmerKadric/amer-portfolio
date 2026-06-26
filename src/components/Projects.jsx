@@ -19,24 +19,6 @@ const projects = [
     featured: true,
   },
   {
-    title: 'Network Operations Dashboard',
-    subtitle: 'IT Infrastructure Monitoring Tool',
-    description:
-      'A web-based dashboard for monitoring and managing LTE-based network connectivity across multiple business locations — built to streamline the day-to-day IT oversight workflow.',
-    features: [
-      'Real-time device status monitoring with alert management and uptime tracking',
-      'Location-based network health overview for multi-site management',
-      'ISP and vendor coordination logs integrated into a single workflow',
-      'Responsive design for mobile-first management on the go',
-    ],
-    tags: ['JavaScript', 'HTML', 'CSS', 'REST API', 'Network Management'],
-    color: '#7c3aed',
-    github: '#', // Replace with actual GitHub link
-    demo: null,
-    placeholder: true,
-    featured: false,
-  },
-  {
     title: 'Portfolio Website',
     subtitle: 'Personal Brand & Developer Portfolio',
     description:
