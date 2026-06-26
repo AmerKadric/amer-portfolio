@@ -60,8 +60,8 @@ export default function About() {
               style={{ boxShadow: '0 0 40px rgba(0,0,0,0.3)' }}
             >
               <p className="text-slate-300 leading-relaxed">
-                I'm a Computer Science graduate from Wayne State University with a 3.72 GPA, and I
-                currently work as an{' '}
+                My name is Amer Kadric — a 24-year-old Bosnian-American and Computer Science
+                graduate from Wayne State University with a 3.72 GPA. I currently work as an{' '}
                 <span className="text-white font-semibold">IT Manager at Lady Jane's Haircuts for Men</span>{' '}
                 — where I'm responsible for keeping technology running across{' '}
                 <span className="text-cyan-400 font-semibold">101 salon locations nationwide</span>.
@@ -70,14 +70,13 @@ export default function About() {
                 My work sits at the intersection of software development and real-world IT operations.
                 I manage LTE-based network infrastructure, administer Google Workspace, troubleshoot
                 hardware and VoIP systems, maintain company websites, and provide technical support
-                that directly affects how each business location operates day to day.
+                that directly impacts how businesses operate day to day.
               </p>
               <p className="text-slate-300 leading-relaxed">
-                On the software side, I develop applications using Python, Java, JavaScript, and
-                Kotlin. I've built an AI/ML-powered Android application that transforms unstructured
-                voice input into structured data — leveraging a multi-agent system with an Urgency
-                Model, Sentiment Model, and Entity Extraction Model. I understand how to architect
-                systems, collaborate with teams, and deliver software that solves real problems.
+                On the software side, I design and develop applications across multiple languages and
+                platforms — bringing the same discipline and ownership to code that I bring to
+                infrastructure. I understand how to architect systems, collaborate with teams, and
+                deliver software that solves real problems at scale.
               </p>
               <p className="text-slate-300 leading-relaxed">
                 What sets me apart is that I don't just write code in isolation — I apply technology
