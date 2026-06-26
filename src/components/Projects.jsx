@@ -168,11 +168,11 @@ export default function Projects() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           {projects.map((project, i) => (
             <div
               key={project.title}
-              className={`reveal reveal-delay-${i + 1} ${project.featured ? 'md:col-span-2' : ''}`}
+              className={`reveal reveal-delay-${i + 1}`}
             >
               <ProjectCard project={project} featured={project.featured} />
             </div>
