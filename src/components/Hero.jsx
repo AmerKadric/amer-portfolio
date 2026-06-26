@@ -40,7 +40,7 @@ export default function Hero() {
               style={{ animationDelay: '0.15s', animationFillMode: 'forwards' }}>
               <span className="h-px w-8 bg-cyan-400/60" />
               <p className="text-cyan-400 font-mono text-sm tracking-widest uppercase">
-                IT Manager &amp; Software Developer
+                Information Technology Manager &amp; Software Developer
               </p>
               <span className="h-px w-8 bg-cyan-400/60" />
             </div>
@@ -152,7 +152,7 @@ export default function Hero() {
                 */}
                 <img
                   src="/profile.jpg"
-                  alt="Amer Kadric — IT Manager and Software Developer"
+                  alt="Amer Kadric — Information Technology Manager and Software Developer"
                   className="w-full h-full object-cover object-top"
                   loading="eager"
                   decoding="async"
@@ -183,6 +183,7 @@ export default function Hero() {
               >
                 IT Manager
               </div>
+
               <div
                 className="absolute top-1/2 -right-10 px-3 py-1.5 rounded-full text-xs font-semibold text-navy-900 animate-float"
                 style={{ background: 'linear-gradient(135deg, #10b981, #059669)', animationDelay: '4s' }}
@@ -216,3 +217,4 @@ export default function Hero() {
     </section>
   )
 }
+

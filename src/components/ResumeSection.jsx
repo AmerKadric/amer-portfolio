@@ -51,7 +51,7 @@ export default function ResumeSection() {
                     Place your resume PDF at: public/resume.pdf
                     The download and view buttons will automatically link to it.
                   */}
-                  IT Manager & Software Developer · Wayne State University CS Graduate
+                  Information Technology Manager & Software Developer · Wayne State University CS Graduate
                 </p>
               </div>
             </div>
@@ -83,7 +83,7 @@ export default function ResumeSection() {
               style={{ borderColor: 'rgba(255,255,255,0.05)', divide: 'rgba(255,255,255,0.05)' }}
             >
               {[
-                { label: 'Current Role', value: 'IT Manager' },
+                { label: 'Current Role', value: 'Information Technology Manager' },
                 { label: 'Degree', value: 'B.S. Computer Science' },
                 { label: 'GPA', value: '3.72 / 4.0' },
                 { label: 'Location', value: 'Detroit, MI' },
@@ -104,3 +104,4 @@ export default function ResumeSection() {
     </section>
   )
 }
+

@@ -2,9 +2,9 @@ import { MapPin, Calendar, ChevronRight } from 'lucide-react'
 
 const experiences = [
   {
-    title: 'IT Manager',
+    title: 'Information Technology Manager',
     company: "Lady Jane's Haircuts for Men",
-    location: 'Detroit, MI',
+    location: 'Birmingham, MI',
     period: 'Jan 2026 – Present',
     current: true,
     color: '#00d4ff',

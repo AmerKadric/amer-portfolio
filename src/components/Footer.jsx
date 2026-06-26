@@ -22,7 +22,7 @@ export default function Footer() {
               <span className="text-white font-bold">Amer Kadric</span>
             </div>
             <p className="text-slate-500 text-sm">
-              IT Manager &amp; Software Developer · Detroit, Michigan
+              Information Technology Manager &amp; Software Developer · Birmingham, Michigan
             </p>
           </div>
 
@@ -77,3 +77,4 @@ export default function Footer() {
     </footer>
   )
 }
+

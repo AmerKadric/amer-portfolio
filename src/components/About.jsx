@@ -62,7 +62,7 @@ export default function About() {
               <p className="text-slate-300 leading-relaxed">
                 My name is Amer Kadric — a 24-year-old Bosnian-American and Computer Science
                 graduate from Wayne State University with a 3.72 GPA. I currently work as an{' '}
-                <span className="text-white font-semibold">IT Manager at Lady Jane's Haircuts for Men</span>{' '}
+                <span className="text-white font-semibold">Information Technology Manager at Lady Jane's Haircuts for Men</span>{' '}
                 — where I'm responsible for keeping technology running across{' '}
                 <span className="text-cyan-400 font-semibold">101 salon locations nationwide</span>.
               </p>
@@ -128,3 +128,4 @@ export default function About() {
     </section>
   )
 }
+
