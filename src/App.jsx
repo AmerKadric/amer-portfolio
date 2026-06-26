@@ -31,7 +31,7 @@ function App() {
   }, [])
 
   return (
-    <div className="min-h-screen overflow-x-hidden" style={{ background: '#050a14' }}>
+    <div className="min-h-screen overflow-x-hidden" style={{ background: '#020810' }}>
       {/* Global background — fixed behind everything */}
       <div className="bg-canvas">
         <div className="bg-orb bg-orb-1" />
