@@ -31,16 +31,32 @@ function App() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-navy-900 overflow-x-hidden">
+    <div className="min-h-screen overflow-x-hidden" style={{ background: '#050a14' }}>
+      {/* Global background — fixed behind everything */}
+      <div className="bg-canvas">
+        <div className="bg-orb bg-orb-1" />
+        <div className="bg-orb bg-orb-2" />
+        <div className="bg-orb bg-orb-3" />
+        <div className="bg-orb bg-orb-4" />
+        <div className="bg-lines" />
+      </div>
+
       <Navbar />
       <main>
         <Hero />
+        <div className="section-divider" />
         <About />
+        <div className="section-divider" />
         <Skills />
+        <div className="section-divider" />
         <Experience />
+        <div className="section-divider" />
         <Projects />
+        <div className="section-divider" />
         <Education />
+        <div className="section-divider" />
         <ResumeSection />
+        <div className="section-divider" />
         <Contact />
       </main>
       <Footer />
