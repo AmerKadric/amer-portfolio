@@ -154,6 +154,8 @@ export default function Hero() {
                   src="/profile.jpg"
                   alt="Amer Kadric — IT Manager and Software Developer"
                   className="w-full h-full object-cover object-top"
+                  loading="eager"
+                  decoding="async"
                   onError={(e) => {
                     // Fallback if image not found
                     e.target.style.display = 'none'

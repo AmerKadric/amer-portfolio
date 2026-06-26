@@ -138,7 +138,7 @@
   -webkit-mask-image: radial-gradient(ellipse 100% 100% at 50% 50%, black 30%, transparent 90%);
 }
 
-/* Animated floating orbs */
+/* Animated floating orbs — desktop only */
 .bg-orb {
   position: absolute;
   border-radius: 50%;
@@ -151,28 +151,38 @@
   width: 600px; height: 600px;
   top: -100px; left: -150px;
   background: radial-gradient(circle, rgba(0,212,255,0.12) 0%, transparent 70%);
-  animation: orbDrift1 20s ease-in-out infinite alternate;
 }
 
 .bg-orb-2 {
   width: 500px; height: 500px;
   top: 20%; right: -100px;
   background: radial-gradient(circle, rgba(124,58,237,0.14) 0%, transparent 70%);
-  animation: orbDrift2 25s ease-in-out infinite alternate;
 }
 
 .bg-orb-3 {
   width: 400px; height: 400px;
   bottom: 10%; left: 20%;
   background: radial-gradient(circle, rgba(0,212,255,0.08) 0%, transparent 70%);
-  animation: orbDrift3 18s ease-in-out infinite alternate;
 }
 
 .bg-orb-4 {
   width: 350px; height: 350px;
   bottom: 30%; right: 15%;
   background: radial-gradient(circle, rgba(168,85,247,0.10) 0%, transparent 70%);
-  animation: orbDrift4 22s ease-in-out infinite alternate;
+}
+
+/* Only animate on desktop — mobile gets static orbs, no GPU churn */
+@media (min-width: 768px) {
+  .bg-orb-1 { animation: orbDrift1 20s ease-in-out infinite alternate; }
+  .bg-orb-2 { animation: orbDrift2 25s ease-in-out infinite alternate; }
+  .bg-orb-3 { animation: orbDrift3 18s ease-in-out infinite alternate; }
+  .bg-orb-4 { animation: orbDrift4 22s ease-in-out infinite alternate; }
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .bg-orb { animation: none !important; }
+  .reveal  { transition: none !important; }
 }
 
 @keyframes orbDrift1 {
