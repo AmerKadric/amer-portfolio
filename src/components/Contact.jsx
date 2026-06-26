@@ -24,13 +24,6 @@ const contactInfo = [
     color: '#00d4ff',
   },
   {
-    icon: <Phone size={18} />,
-    label: 'Phone',
-    value: '(586) 265-1843',
-    href: 'tel:+15862651843',
-    color: '#7c3aed',
-  },
-  {
     icon: <Linkedin size={18} />,
     label: 'LinkedIn',
     value: 'linkedin.com/in/amer-kadric',
