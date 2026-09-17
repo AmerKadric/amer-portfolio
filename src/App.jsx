@@ -3,7 +3,6 @@ import Hero from './components/Hero'
 import About from './components/About'
 import Skills from './components/Skills'
 import Experience from './components/Experience'
-import Projects from './components/Projects'
 import Education from './components/Education'
 import ResumeSection from './components/ResumeSection'
 import Contact from './components/Contact'
@@ -30,8 +29,6 @@ function App() {
         <Skills />
         <div className="section-divider" />
         <Experience />
-        <div className="section-divider" />
-        <Projects />
         <div className="section-divider" />
         <Education />
         <div className="section-divider" />
