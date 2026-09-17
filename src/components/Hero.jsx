@@ -144,14 +144,13 @@ export default function Hero() {
                   boxShadow: '0 0 50px rgba(0,212,255,0.2), 0 0 100px rgba(124,58,237,0.1)',
                 }}
               >
-                {/*
-                  PROFILE IMAGE
-                  Replace /profile.png with your actual photo.
-                  Place your photo at: public/profile.png
-                */}
+                <picture>
+                  <source srcSet="/profile.webp" type="image/webp" />
+                  <source srcSet="/profile.png" type="image/png" />
+                </picture>
                 <img
-                  src="/profile.png"
-                  alt="Amer Kadric — Information Technology Manager and Software Developer"
+                  src="/profile.webp"
+                  alt="Amer Kadric — Information Technology Manager"
                   className="w-full h-full object-cover"
                   style={{ objectPosition: 'center 35%' }}
                   loading="eager"
