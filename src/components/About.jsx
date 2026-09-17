@@ -1,20 +1,10 @@
-import { Code2, Network, Wrench, Globe, Cpu, Users } from 'lucide-react'
+import { Network, Wrench, Globe, Headphones, Users, Shield } from 'lucide-react'
 
 const highlights = [
-  {
-    icon: <Code2 size={20} />,
-    title: 'Software Development',
-    desc: 'Building functional applications across Android, web, and backend systems using Python, Java, JavaScript, and Kotlin.',
-  },
   {
     icon: <Network size={20} />,
     title: 'Network & IT Management',
     desc: 'Managing LTE-based connectivity and IT infrastructure across 100+ business locations with real uptime accountability.',
-  },
-  {
-    icon: <Globe size={20} />,
-    title: 'Web Development',
-    desc: 'Maintaining and updating company websites — handling content, configuration, and code-level fixes on production systems.',
   },
   {
     icon: <Wrench size={20} />,
@@ -22,14 +12,24 @@ const highlights = [
     desc: 'Diagnosing and resolving hardware, software, VoIP, and network issues that directly impact business operations.',
   },
   {
-    icon: <Cpu size={20} />,
-    title: 'AI/ML Integration',
-    desc: 'Developed a multi-agent AI system combining voice input, NLP, and structured data extraction for real-world use.',
+    icon: <Globe size={20} />,
+    title: 'Web & Systems Maintenance',
+    desc: 'Maintaining company websites and internal systems — handling content updates, configuration, and production fixes.',
+  },
+  {
+    icon: <Shield size={20} />,
+    title: 'Google Workspace Admin',
+    desc: 'Managing user provisioning, access control, and authentication for the entire organization at scale.',
+  },
+  {
+    icon: <Headphones size={20} />,
+    title: 'End User Support',
+    desc: 'Providing Tier 1–2 technical support and endpoint setup for staff across all business locations.',
   },
   {
     icon: <Users size={20} />,
-    title: 'Business Technology Support',
-    desc: 'Supporting end users, coordinating with ISPs and vendors, and keeping multi-location business technology reliable.',
+    title: 'Vendor & ISP Coordination',
+    desc: 'Working directly with ISPs and technology vendors to resolve network performance issues and manage escalations.',
   },
 ]
 
@@ -67,22 +67,15 @@ export default function About() {
                 <span className="text-cyan-400 font-semibold">101 salon locations nationwide</span>.
               </p>
               <p className="text-slate-300 leading-relaxed">
-                My work sits at the intersection of software development and real-world IT operations.
-                I manage LTE-based network infrastructure, administer Google Workspace, troubleshoot
-                hardware and VoIP systems, maintain company websites, and provide technical support
-                that directly impacts how businesses operate day to day.
+                My work is firmly in real-world IT operations — managing LTE-based network
+                infrastructure, administering Google Workspace, troubleshooting hardware and VoIP
+                systems, maintaining company websites, and providing technical support that directly
+                impacts how businesses operate day to day.
               </p>
               <p className="text-slate-300 leading-relaxed">
-                On the software side, I design and develop applications across multiple languages and
-                platforms — bringing the same discipline and ownership to code that I bring to
-                infrastructure. I understand how to architect systems, collaborate with teams, and
-                deliver software that solves real problems at scale.
-              </p>
-              <p className="text-slate-300 leading-relaxed">
-                What sets me apart is that I don't just write code in isolation — I apply technology
-                to real business environments, work with vendors and ISPs, support end users at scale,
-                and take full ownership of the systems I manage. I bring both technical depth and
-                operational awareness to everything I do.
+                What sets me apart is that I take full ownership of the systems I manage — working
+                directly with vendors and ISPs, supporting end users at scale, and bringing a
+                Computer Science foundation to practical, business-critical IT decisions.
               </p>
 
               {/* Stats row */}
@@ -90,7 +83,7 @@ export default function About() {
                 {[
                   { value: '101', label: 'Locations Managed' },
                   { value: '3.72', label: 'GPA' },
-                  { value: '5+', label: 'Languages' },
+                  { value: '4+', label: 'Yrs Experience' },
                 ].map((stat) => (
                   <div key={stat.label} className="text-center">
                     <p className="text-2xl font-bold accent-gradient">{stat.value}</p>

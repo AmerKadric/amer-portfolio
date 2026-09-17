@@ -2,33 +2,6 @@ import { useState } from 'react'
 
 const skillCategories = [
   {
-    id: 'languages',
-    label: 'Languages',
-    color: '#00d4ff',
-    skills: [
-      { name: 'Java', level: 85 },
-      { name: 'Python', level: 82 },
-      { name: 'JavaScript', level: 80 },
-      { name: 'Kotlin', level: 75 },
-      { name: 'C++', level: 70 },
-      { name: 'C', level: 68 },
-      { name: 'HTML/CSS', level: 88 },
-    ],
-  },
-  {
-    id: 'web',
-    label: 'Web & Mobile',
-    color: '#7c3aed',
-    skills: [
-      { name: 'React', level: 72 },
-      { name: 'Node.js', level: 65 },
-      { name: 'Android Dev', level: 78 },
-      { name: 'REST APIs', level: 75 },
-      { name: 'Responsive Design', level: 82 },
-      { name: 'Bootstrap', level: 76 },
-    ],
-  },
-  {
     id: 'it',
     label: 'IT & Networking',
     color: '#10b981',
@@ -53,16 +26,6 @@ const skillCategories = [
       { name: 'IntelliJ IDEA', level: 78 },
       { name: 'Linux', level: 72 },
       { name: 'Microsoft Suite', level: 85 },
-    ],
-  },
-  {
-    id: 'databases',
-    label: 'Databases',
-    color: '#ef4444',
-    skills: [
-      { name: 'MySQL', level: 74 },
-      { name: 'SQL', level: 76 },
-      { name: 'Database Design', level: 70 },
     ],
   },
   {
@@ -102,7 +65,7 @@ function SkillBar({ name, level, color, delay }) {
 }
 
 export default function Skills() {
-  const [active, setActive] = useState('languages')
+  const [active, setActive] = useState('it')
   const current = skillCategories.find((c) => c.id === active)
 
   return (
@@ -116,8 +79,7 @@ export default function Skills() {
           </p>
           <h2 className="section-heading">What I Work With</h2>
           <p className="section-subheading mx-auto">
-            A versatile toolkit spanning software development, IT operations, and business
-            technology management.
+            A hands-on toolkit spanning IT operations, networking, and business technology management.
           </p>
         </div>
 

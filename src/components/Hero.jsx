@@ -40,25 +40,24 @@ export default function Hero() {
               style={{ animationDelay: '0.15s', animationFillMode: 'forwards' }}>
               <span className="h-px w-8 bg-cyan-400/60" />
               <p className="text-cyan-400 font-mono text-sm tracking-widest uppercase">
-                Information Technology Manager &amp; Software Developer
+                Information Technology Manager
               </p>
               <span className="h-px w-8 bg-cyan-400/60" />
             </div>
 
             <h2 className="text-xl sm:text-2xl text-slate-300 font-light mb-6 max-w-xl mx-auto lg:mx-0 leading-relaxed opacity-0 animate-fade-up"
               style={{ animationDelay: '0.25s', animationFillMode: 'forwards' }}>
-              Turning real-world technology challenges into{' '}
+              Keeping technology reliable across{' '}
               <span className="text-white font-medium">
-                reliable, scalable solutions
+                100+ business locations
               </span>{' '}
-              — through code, systems thinking, and hands-on IT leadership.
+              — through hands-on IT leadership, systems thinking, and real operational ownership.
             </h2>
 
             <p className="text-slate-400 max-w-lg mx-auto lg:mx-0 mb-10 leading-relaxed opacity-0 animate-fade-up"
               style={{ animationDelay: '0.35s', animationFillMode: 'forwards' }}>
-              Computer Science graduate with professional experience managing IT
-              infrastructure across 100+ locations, developing software, and
-              building systems that businesses actually depend on.
+              Computer Science graduate managing IT infrastructure, network connectivity,
+              and business technology across a 101-location national franchise.
             </p>
 
             {/* CTA Buttons */}
