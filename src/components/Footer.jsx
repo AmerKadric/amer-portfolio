@@ -9,10 +9,10 @@ export default function Footer() {
       style={{ borderColor: 'rgba(255,255,255,0.05)', background: '#020817' }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="flex flex-col items-center gap-6">
           {/* Brand */}
-          <div className="text-center md:text-left">
-            <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2 mb-2">
               <span
                 className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold text-navy-900"
                 style={{ background: 'linear-gradient(135deg, #00d4ff, #7c3aed)' }}
