@@ -147,11 +147,11 @@ export default function Hero() {
               >
                 {/*
                   PROFILE IMAGE
-                  Replace /profile.jpg with your actual photo.
-                  Place your photo at: public/profile.jpg
+                  Replace /profile.png with your actual photo.
+                  Place your photo at: public/profile.png
                 */}
                 <img
-                  src="/profile.jpg"
+                  src="/profile.png"
                   alt="Amer Kadric — Information Technology Manager and Software Developer"
                   className="w-full h-full object-cover object-top"
                   loading="eager"
