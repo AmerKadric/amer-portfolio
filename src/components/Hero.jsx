@@ -153,7 +153,8 @@ export default function Hero() {
                 <img
                   src="/profile.png"
                   alt="Amer Kadric — Information Technology Manager and Software Developer"
-                  className="w-full h-full object-cover object-center"
+                  className="w-full h-full object-cover"
+                  style={{ objectPosition: 'center 35%' }}
                   loading="eager"
                   decoding="async"
                   onError={(e) => {
