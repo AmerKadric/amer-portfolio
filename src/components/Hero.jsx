@@ -169,26 +169,6 @@ export default function Hero() {
                 />
               </div>
 
-              {/* Floating tech badges */}
-              <div
-                className="absolute -top-3 -right-4 px-3 py-1.5 rounded-full text-xs font-semibold text-navy-900 animate-float"
-                style={{ background: 'linear-gradient(135deg, #00d4ff, #0891b2)', animationDelay: '0s' }}
-              >
-                Python
-              </div>
-              <div
-                className="absolute -bottom-2 -left-6 px-3 py-1.5 rounded-full text-xs font-semibold text-navy-900 animate-float"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #a855f7)', animationDelay: '2s' }}
-              >
-                IT Manager
-              </div>
-
-              <div
-                className="absolute top-1/2 -right-10 px-3 py-1.5 rounded-full text-xs font-semibold text-navy-900 animate-float"
-                style={{ background: 'linear-gradient(135deg, #10b981, #059669)', animationDelay: '4s' }}
-              >
-                Java
-              </div>
             </div>
           </div>
         </div>
