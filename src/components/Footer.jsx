@@ -22,7 +22,7 @@ export default function Footer() {
               <span className="text-white font-bold">Amer Kadric</span>
             </div>
             <p className="text-slate-500 text-sm">
-              Information Technology Manager &amp; Software Developer · Birmingham, Michigan
+              Information Technology Manager · Birmingham, Michigan
             </p>
           </div>
 
@@ -70,7 +70,7 @@ export default function Footer() {
 
         <div className="mt-8 pt-6 border-t border-white/5 text-center">
           <p className="text-slate-600 text-xs">
-            © {new Date().getFullYear()} Amer Kadric. Built with React &amp; Tailwind CSS.
+            © 2026 Amer Kadric.
           </p>
         </div>
       </div>
