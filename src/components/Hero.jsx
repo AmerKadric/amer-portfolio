@@ -1,4 +1,4 @@
-import { ArrowDown, Github, Linkedin, Mail, Download, ExternalLink } from 'lucide-react'
+import { ArrowDown, Github, Linkedin, Mail, Download } from 'lucide-react'
 
 export default function Hero() {
   const scrollToAbout = () => {
@@ -63,14 +63,7 @@ export default function Hero() {
             {/* CTA Buttons */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-10"
               style={{ animationDelay: '0.45s', animationFillMode: 'forwards' }}>
-              <button
-                onClick={() => document.getElementById('projects')?.scrollIntoView({ behavior: 'smooth' })}
-                className="btn-primary"
-              >
-                <ExternalLink size={16} />
-                View My Work
-              </button>
-              <a href="/resume.pdf" download className="btn-outline">
+              <a href="/resume.pdf" download className="btn-primary">
                 <Download size={16} />
                 Download Resume
               </a>
