@@ -30,13 +30,13 @@ export default function Hero() {
           {/* Left: Text content */}
           <div className="flex-1 text-center lg:text-left">
 
-            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-white mb-4 leading-tight opacity-0 animate-fade-up"
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold text-white mb-4 leading-tight"
               style={{ animationFillMode: 'forwards' }}>
               Amer{' '}
               <span className="accent-gradient">Kadric</span>
             </h1>
 
-            <div className="flex items-center justify-center lg:justify-start gap-2 mb-6 opacity-0 animate-fade-up"
+            <div className="flex items-center justify-center lg:justify-start gap-2 mb-6"
               style={{ animationDelay: '0.15s', animationFillMode: 'forwards' }}>
               <span className="h-px w-8 bg-cyan-400/60" />
               <p className="text-cyan-400 font-mono text-sm tracking-widest uppercase">
@@ -45,7 +45,7 @@ export default function Hero() {
               <span className="h-px w-8 bg-cyan-400/60" />
             </div>
 
-            <h2 className="text-xl sm:text-2xl text-slate-300 font-light mb-6 max-w-xl mx-auto lg:mx-0 leading-relaxed opacity-0 animate-fade-up"
+            <h2 className="text-xl sm:text-2xl text-slate-300 font-light mb-6 max-w-xl mx-auto lg:mx-0 leading-relaxed"
               style={{ animationDelay: '0.25s', animationFillMode: 'forwards' }}>
               Keeping technology reliable across{' '}
               <span className="text-white font-medium">
@@ -54,14 +54,14 @@ export default function Hero() {
               — through hands-on IT leadership, systems thinking, and real operational ownership.
             </h2>
 
-            <p className="text-slate-400 max-w-lg mx-auto lg:mx-0 mb-10 leading-relaxed opacity-0 animate-fade-up"
+            <p className="text-slate-400 max-w-lg mx-auto lg:mx-0 mb-10 leading-relaxed"
               style={{ animationDelay: '0.35s', animationFillMode: 'forwards' }}>
               Computer Science graduate managing IT infrastructure, network connectivity,
               and business technology across a 101-location national franchise.
             </p>
 
             {/* CTA Buttons */}
-            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-10 opacity-0 animate-fade-up"
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-10"
               style={{ animationDelay: '0.45s', animationFillMode: 'forwards' }}>
               <button
                 onClick={() => document.getElementById('projects')?.scrollIntoView({ behavior: 'smooth' })}
@@ -84,7 +84,7 @@ export default function Hero() {
             </div>
 
             {/* Social links */}
-            <div className="flex items-center justify-center lg:justify-start gap-4 opacity-0 animate-fade-up"
+            <div className="flex items-center justify-center lg:justify-start gap-4"
               style={{ animationDelay: '0.55s', animationFillMode: 'forwards' }}>
               <a
                 href="https://www.linkedin.com/in/amer-kadric"
@@ -115,7 +115,7 @@ export default function Hero() {
           </div>
 
           {/* Right: Profile image */}
-          <div className="flex-shrink-0 flex items-center justify-center opacity-0 animate-fade-in"
+          <div className="flex-shrink-0 flex items-center justify-center"
             style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }}>
             <div className="relative">
               {/* Outer glow ring */}
