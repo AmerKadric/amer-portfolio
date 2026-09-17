@@ -1,4 +1,4 @@
-import { Network, Wrench, Globe, Users, Shield, HeadphonesIcon } from 'lucide-react'
+import { Network, Wrench, Globe, Users, Shield, Headphones } from 'lucide-react'
 
 const highlights = [
   {
@@ -22,7 +22,7 @@ const highlights = [
     desc: 'Managing user provisioning, access control, and authentication across the organization at scale.',
   },
   {
-    icon: <HeadphonesIcon size={20} />,
+    icon: <Headphones size={20} />,
     title: 'End User Support',
     desc: 'Providing Tier 1–2 technical support, endpoint configuration, and issue resolution across all business locations.',
   },
