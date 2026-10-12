@@ -49,7 +49,7 @@ export const experience = [
     title: 'Student Intern — Software Developer',
     company: 'National Security Innovation Network (NSIN)',
     location: 'Remote',
-    period: 'Sep 2024 – Dec 2024',
+    period: 'Sep 2024 – Jan 2025',
     description:
       'Built an Android app with a cross-functional team that turns unstructured voice and text input into structured, actionable data.',
     bullets: [
