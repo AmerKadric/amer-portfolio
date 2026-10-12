@@ -4,7 +4,7 @@ export const profile = {
   name: 'Amer Kadric',
   role: 'Information Technology Manager',
   location: 'Detroit, Michigan',
-  email: 'kadricameer@gmail.com',
+  email: 'hd0761@wayne.edu',
   github: 'https://github.com/AmerKadric',
   linkedin: 'https://www.linkedin.com/in/amer-kadric',
   resume: '/resume.pdf',
@@ -49,7 +49,7 @@ export const experience = [
     title: 'Student Intern — Software Developer',
     company: 'National Security Innovation Network (NSIN)',
     location: 'Remote',
-    period: 'Sep 2024 – Jan 2025',
+    period: 'Aug 2024 – Jan 2025',
     description:
       'Built an Android app with a cross-functional team that turns unstructured voice and text input into structured, actionable data.',
     bullets: [
