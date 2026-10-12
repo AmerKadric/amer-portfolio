@@ -51,7 +51,7 @@ export const experience = [
     location: 'Remote',
     period: 'Aug 2024 – Jan 2025',
     description:
-      'Built an Android app with a cross-functional team that turns unstructured voice and text input into structured, actionable data.',
+      'Built an Android app with a cross-functional team, powered by a multi-agent system of machine learning models, that turns unstructured voice and text input into structured, actionable data.',
     bullets: [
       'Developed an Android application prototype on a team that converts unstructured voice and text input into structured data',
       'Implemented front-end features and improved usability for message input, display, and navigation',
