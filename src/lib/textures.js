@@ -20,7 +20,9 @@ function paint(seed, pixel) {
   const r = rng(seed)
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
-      const [R, G, B] = pixel(x, y, r)
+      const px = pixel(x, y, r)
+      if (!px) continue // transparent
+      const [R, G, B] = px
       g.fillStyle = `rgb(${R},${G},${B})`
       g.fillRect(x, y, 1, 1)
     }
@@ -59,6 +61,51 @@ export function worldTextures(p) {
         return vary(x % 5 === 2 ? [62, 124, 42] : [82, 150, 56], r, 16)
       }),
     cactusTop: () => paint(26, (x, y, r) => vary((x + y) % 4 === 0 ? [62, 124, 42] : [92, 162, 62], r, 14)),
+    birchSide: () =>
+      paint(28, (x, y, r) => {
+        const mark = (y % 6 === 2 && x > 3 && x < 9) || (y % 7 === 5 && x > 9 && x < 13)
+        return mark ? vary([40, 40, 36], r, 10) : vary([216, 214, 204], r, 14)
+      }),
+    birchTop: () =>
+      paint(29, (x, y, r) => {
+        const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5))
+        if (d > 6.5) return vary([216, 214, 204], r, 14)
+        return vary(Math.floor(d) % 2 ? [200, 184, 130] : [182, 166, 116], r, 12)
+      }),
+    birchLeaves: () => paint(30, (x, y, r) => (r() < 0.18 ? vary([70, 104, 46], r, 20) : vary([112, 156, 76], r, 40))),
+    snowLeaves: () => paint(31, (x, y, r) => (r() < 0.25 ? vary(shade(p.leaves, 0.8), r, 20) : vary(SNOW, r, 12))),
+    // Plants: drawn on transparent canvases and shown as two crossed planes
+    tallGrass: () =>
+      paint(32, (x, y, r) => {
+        const blade = 4 + ((x * 7 + 3) % 9) // per-column blade height
+        return x % 2 === 0 && 15 - y < blade ? vary(p.grass, r, 36) : null
+      }),
+    fern: () =>
+      paint(33, (x, y, r) => {
+        const dx = Math.abs(x - 7.5)
+        const frond = y > 3 && dx < (16 - y) * 0.55 && (x + y) % 3 !== 0
+        return frond ? vary(shade(p.leaves, 1.1), r, 30) : null
+      }),
+    poppy: () =>
+      paint(34, (x, y, r) => {
+        if (y >= 9 && (x === 7 || (y === 11 && x === 8))) return vary([60, 120, 40], r, 16)
+        if (y >= 4 && y <= 8 && Math.abs(x - 7.5) + Math.abs(y - 6) < 3.2) return vary(y < 6 ? [214, 36, 30] : [180, 24, 24], r, 18)
+        return null
+      }),
+    dandelion: () =>
+      paint(35, (x, y, r) => {
+        if (y >= 10 && x === 7) return vary([70, 130, 44], r, 16)
+        if (y >= 6 && y <= 9 && x >= 6 && x <= 9) return vary([246, 210, 40], r, 22)
+        return null
+      }),
+    deadBush: () =>
+      paint(36, (x, y, r) => {
+        const branch =
+          (y >= 12 && x === 7) ||
+          (y >= 6 && y < 12 && (x === 7 - Math.floor((12 - y) / 2) || x === 8 + Math.floor((12 - y) / 2))) ||
+          (y >= 4 && y < 8 && x === 7)
+        return branch ? vary([120, 82, 40], r, 22) : null
+      }),
     water: () => paint(19, (x, y, r) => vary([54, 98, 214], r, 22)),
     ice: () => paint(27, (x, y, r) => vary(r() < 0.08 ? [200, 220, 250] : [146, 182, 238], r, 18)),
   }

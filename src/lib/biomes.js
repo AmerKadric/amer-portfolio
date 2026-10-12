@@ -1,5 +1,9 @@
 // Biome definitions for the background panorama. Each one controls terrain
 // shape, which blocks cover the ground, what grows on it, and the sky.
+//
+// height(n, ridge): n is smooth noise (typically 0.26–0.73), ridge is 0–1 and
+// peaks along sharp lines — only the mountains use it.
+// trees.kinds: tree type → share of trees. plants: [type, chance, ground block].
 
 const forestSurface = (top, depth, { sea }) => {
   const beach = top <= sea + 1
@@ -18,7 +22,8 @@ export const BIOMES = {
     sea: 10,
     water: 'water',
     surface: forestSurface,
-    trees: { kind: 'oak', chance: 0.022, maxTop: 21 },
+    trees: { kinds: { oak: 0.7, birch: 0.3 }, chance: 0.024, maxTop: 21 },
+    plants: [['tallGrass', 0.14, 'grass'], ['poppy', 0.012, 'grass'], ['dandelion', 0.016, 'grass']],
     clouds: 26,
   },
 
@@ -35,9 +40,11 @@ export const BIOMES = {
       if (depth < 4) return 'dirt'
       return 'stone'
     },
-    trees: { kind: 'spruce', chance: 0.03, maxTop: 22 },
+    trees: { kinds: { spruce: 1 }, chance: 0.03, maxTop: 22 },
+    snowyLeaves: true,
+    plants: [['fern', 0.03, 'snowGrass']],
     clouds: 34,
-    light: 1.35,
+    light: 0.92,
   },
 
   desert: {
@@ -53,24 +60,24 @@ export const BIOMES = {
       if (depth < 7) return 'sandstone'
       return 'stone'
     },
-    trees: { kind: 'cactus', chance: 0.012, minAboveSea: 1 },
+    trees: { kinds: { cactus: 1 }, chance: 0.012, minAboveSea: 1 },
+    plants: [['deadBush', 0.014, 'sand']],
     clouds: 8,
-    light: 1.75,
+    light: 1.06,
   },
 
   mountains: {
     label: 'Mountains',
     palette: { grass: [100, 152, 70], leaves: [52, 110, 44], bark: [92, 70, 44], ring: [150, 118, 76] },
     sky: ['#4f86dc', '#9cc0f0', '#c8dbf6'],
-    fog: ['#c3d6f3', 34, 80],
-    // Stretch the noise's typical 0.26–0.73 range to 0–1, then push the high end into sharp peaks
-    height: (n) => {
+    fog: ['#c3d6f3', 30, 66],
+    // Stretch the noise to 0–1, push the high end into peaks, and carve ridges into them
+    height: (n, ridge) => {
       const m = Math.min(1.1, Math.max(0, (n - 0.26) / 0.47))
-      return 6 + m * 12 + Math.max(0, m - 0.35) ** 2 * 70
+      return 6 + m * 12 + Math.max(0, m - 0.35) ** 2 * 55 + Math.max(0, m - 0.4) * ridge * 22
     },
     sea: 9,
     water: 'water',
-    fillDepth: 16,
     minEye: 34, // look out over the peaks rather than up from a valley
     surface: (top, depth, { sea }) => {
       if (depth === 0) {
@@ -81,7 +88,8 @@ export const BIOMES = {
       if (depth < 3 && top <= 24) return top <= sea + 1 ? 'sand' : 'dirt'
       return 'stone'
     },
-    trees: { kind: 'spruce', chance: 0.02, maxTop: 22 },
+    trees: { kinds: { spruce: 0.8, oak: 0.2 }, chance: 0.02, maxTop: 22 },
+    plants: [['tallGrass', 0.08, 'grass']],
     clouds: 20,
   },
 
@@ -98,9 +106,10 @@ export const BIOMES = {
     sea: 8,
     water: 'water',
     surface: forestSurface,
-    trees: { kind: 'acacia', chance: 0.012, maxTop: 30 },
+    trees: { kinds: { acacia: 1 }, chance: 0.012, maxTop: 30 },
+    plants: [['tallGrass', 0.22, 'grass']],
     clouds: 14,
-    light: 1.7,
+    light: 1.06,
   },
 }
 

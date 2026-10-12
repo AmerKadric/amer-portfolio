@@ -6,9 +6,16 @@ import { useSettings } from '../lib/settings'
 
 // A procedurally generated voxel world, viewed from a hilltop by a slowly
 // turning camera — the same idea as a game's rotating menu panorama.
+//
+// Instead of drawing every block as a cube, only faces that touch air are
+// meshed, and each corner is darkened by the blocks around it (ambient
+// occlusion) with fixed per-face brightness — the classic blocky-game look,
+// with no real-time lights needed.
 
 const SIZE = 112
+const HALF = SIZE / 2
 const TURN_SPEED = (Math.PI * 2) / 160 // one full turn every ~160s
+const FRAME_MS = 1000 / 30 // cap at 30fps: plenty for a slow pan, kinder to batteries
 
 function makeNoise(seed) {
   const hash = (x, z) => {
@@ -34,135 +41,266 @@ function texture(canvas) {
   return t
 }
 
-// Tree shapes, each pushing block positions into `blocks`
-const TREES = {
-  oak(x, top, z, r, blocks, leaves) {
-    const trunk = 4 + Math.floor(r() * 2)
-    for (let y = 1; y <= trunk; y++) blocks.log.push(x, top + y, z)
-    for (let dy = trunk - 2; dy <= trunk + 1; dy++) {
-      const rad = dy >= trunk ? 1 : 2
-      for (let dx = -rad; dx <= rad; dx++) {
-        for (let dz = -rad; dz <= rad; dz++) {
-          if (dx === 0 && dz === 0 && dy <= trunk) continue
-          if (Math.abs(dx) === rad && Math.abs(dz) === rad && (dy === trunk + 1 || r() < 0.5)) continue
-          leaves.add(`${x + dx},${top + dy},${z + dz}`)
-        }
+// ---------- Blocks ----------
+
+// Texture per face, in order +x, -x, +y, -y, +z, -z
+const all = (t) => [t, t, t, t, t, t]
+const sides = (side, top, bottom = top) => [side, side, top, bottom, side, side]
+const BLOCK_FACES = {
+  grass: sides('grassSide', 'grassTop', 'dirt'),
+  snowGrass: sides('snowSide', 'snow', 'dirt'),
+  dirt: all('dirt'),
+  stone: all('stone'),
+  sand: all('sand'),
+  sandstone: all('sandstone'),
+  snow: all('snow'),
+  log: sides('logSide', 'logTop'),
+  birchLog: sides('birchSide', 'birchTop'),
+  leaves: all('leaves'),
+  birchLeaves: all('birchLeaves'),
+  snowLeaves: sides('leaves', 'snowLeaves', 'leaves'),
+  cactus: sides('cactusSide', 'cactusTop'),
+}
+const INSET = { cactus: 1 / 16 } // cactus sides sit one pixel in from the block edge
+const SEE_THROUGH = new Set(['cactus']) // doesn't hide neighbouring faces
+
+const FACES = [
+  { n: [1, 0, 0], u: 2, v: 1, shade: 0.6 },
+  { n: [-1, 0, 0], u: 2, v: 1, shade: 0.6 },
+  { n: [0, 1, 0], u: 0, v: 2, shade: 1 },
+  { n: [0, -1, 0], u: 0, v: 2, shade: 0.5 },
+  { n: [0, 0, 1], u: 0, v: 1, shade: 0.8 },
+  { n: [0, 0, -1], u: 0, v: 1, shade: 0.8 },
+]
+const AO = [0.5, 0.66, 0.82, 1] // corner brightness by number of open neighbours
+
+const key = (x, y, z) => ((x + 128) * 256 + (z + 128)) * 256 + y
+
+// ---------- Trees ----------
+
+function placeTrees(set, setIfEmpty) {
+  const canopy = (cx, y, cz, rad, kind, r, roundTop) => {
+    for (let dx = -rad; dx <= rad; dx++) {
+      for (let dz = -rad; dz <= rad; dz++) {
+        if (Math.abs(dx) === rad && Math.abs(dz) === rad && (roundTop || r() < 0.5)) continue
+        setIfEmpty(cx + dx, y, cz + dz, kind)
       }
     }
-  },
-  spruce(x, top, z, r, blocks, leaves) {
-    const trunk = 6 + Math.floor(r() * 3)
-    for (let y = 1; y <= trunk; y++) blocks.log.push(x, top + y, z)
-    leaves.add(`${x},${top + trunk + 1},${z}`)
-    for (let dy = trunk; dy >= 3; dy--) {
-      // narrow at the top, alternating wider/narrower rings below
-      const rad = trunk - dy < 2 ? 1 : 1 + ((trunk - dy) % 2)
-      for (let dx = -rad; dx <= rad; dx++) {
-        for (let dz = -rad; dz <= rad; dz++) {
-          if (dx === 0 && dz === 0) continue
-          if (Math.abs(dx) === rad && Math.abs(dz) === rad) continue
-          leaves.add(`${x + dx},${top + dy},${z + dz}`)
-        }
+  }
+  const broadleaf = (log, leaves) => (x, top, z, r) => {
+    const trunk = 4 + Math.floor(r() * 2) + (log === 'birchLog' ? 1 : 0)
+    for (let y = 1; y <= trunk; y++) set(x, top + y, z, log)
+    canopy(x, top + trunk - 2, z, 2, leaves, r, false)
+    canopy(x, top + trunk - 1, z, 2, leaves, r, false)
+    canopy(x, top + trunk, z, 1, leaves, r, false)
+    canopy(x, top + trunk + 1, z, 1, leaves, r, true)
+  }
+  return {
+    oak: broadleaf('log', 'leaves'),
+    birch: broadleaf('birchLog', 'birchLeaves'),
+    spruce(x, top, z, r) {
+      const trunk = 6 + Math.floor(r() * 3)
+      for (let y = 1; y <= trunk; y++) set(x, top + y, z, 'log')
+      setIfEmpty(x, top + trunk + 1, z, 'leaves')
+      for (let dy = trunk; dy >= 3; dy--) {
+        // narrow at the top, alternating wider/narrower rings below
+        const rad = trunk - dy < 2 ? 1 : 1 + ((trunk - dy) % 2)
+        canopy(x, top + dy, z, rad, 'leaves', r, true)
       }
-    }
-  },
-  acacia(x, top, z, r, blocks, leaves) {
-    const [ddx, ddz] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(r() * 4)]
-    for (let y = 1; y <= 3; y++) blocks.log.push(x, top + y, z)
-    blocks.log.push(x + ddx, top + 4, z + ddz, x + 2 * ddx, top + 5, z + 2 * ddz)
-    const cx = x + 2 * ddx, cz = z + 2 * ddz
-    for (const [dy, rad] of [[6, 2], [7, 1]]) {
-      for (let dx = -rad; dx <= rad; dx++) {
-        for (let dz = -rad; dz <= rad; dz++) {
-          if (Math.abs(dx) === rad && Math.abs(dz) === rad) continue
-          leaves.add(`${cx + dx},${top + dy},${cz + dz}`)
-        }
-      }
-    }
-  },
-  cactus(x, top, z, r, blocks) {
-    const tall = 1 + Math.floor(r() * 3)
-    for (let y = 1; y <= tall; y++) blocks.cactus.push(x, top + y, z)
-  },
+    },
+    acacia(x, top, z, r) {
+      const [ddx, ddz] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(r() * 4)]
+      for (let y = 1; y <= 3; y++) set(x, top + y, z, 'log')
+      set(x + ddx, top + 4, z + ddz, 'log')
+      set(x + 2 * ddx, top + 5, z + 2 * ddz, 'log')
+      // a short second branch the other way, like the real thing
+      set(x - ddx, top + 4, z - ddz, 'log')
+      const cx = x + 2 * ddx, cz = z + 2 * ddz
+      canopy(cx, top + 6, cz, 2, 'leaves', r, true)
+      canopy(cx, top + 7, cz, 1, 'leaves', r, true)
+      canopy(x - ddx, top + 5, z - ddz, 1, 'leaves', r, true)
+    },
+    cactus(x, top, z, r) {
+      const tall = 1 + Math.floor(r() * 3)
+      for (let y = 1; y <= tall; y++) set(x, top + y, z, 'cactus')
+    },
+  }
 }
 
-const TREE_GROUND = { oak: ['grass'], acacia: ['grass'], spruce: ['grass', 'snowGrass'], cactus: ['sand'] }
+const TREE_GROUND = { oak: ['grass'], birch: ['grass'], acacia: ['grass'], spruce: ['grass', 'snowGrass'], cactus: ['sand'] }
+
+function pickWeighted(kinds, r) {
+  let roll = r()
+  for (const [kind, share] of Object.entries(kinds)) {
+    if ((roll -= share) <= 0) return kind
+  }
+  return Object.keys(kinds)[0]
+}
+
+// ---------- World ----------
 
 function buildWorld(scene, disposables, biome) {
   const noise = makeNoise(7)
+  const ridgeNoise = makeNoise(13)
   const { sea } = biome
-  const heightAt = (x, z) => Math.round(biome.height(noise(x * 0.045 + 40, z * 0.045 + 40)))
+  const ridge = (x, z) => Math.max(0, 1 - Math.abs(ridgeNoise(x * 0.08, z * 0.08) - 0.5) / 0.22)
+  const heightAt = (x, z) => Math.round(biome.height(noise(x * 0.045 + 40, z * 0.045 + 40), ridge(x, z)))
 
-  const half = SIZE / 2
-  const heights = []
-  for (let x = -half; x < half; x++) {
-    heights[x + half] = []
-    for (let z = -half; z < half; z++) heights[x + half][z + half] = heightAt(x, z)
+  const heights = new Int16Array(SIZE * SIZE)
+  for (let x = -HALF; x < HALF; x++) {
+    for (let z = -HALF; z < HALF; z++) heights[(x + HALF) * SIZE + z + HALF] = heightAt(x, z)
   }
-  const h = (x, z) => heights[x + half]?.[z + half] ?? heightAt(x, z)
+  const inside = (x, z) => x >= -HALF && x < HALF && z >= -HALF && z < HALF
+  const h = (x, z) => (inside(x, z) ? heights[(x + HALF) * SIZE + z + HALF] : heightAt(x, z))
+  const ground = (x, z) => biome.surface(h(x, z), 0, { sea })
 
-  const blocks = {
-    grass: [], snowGrass: [], dirt: [], stone: [], sand: [], sandstone: [], snow: [],
-    log: [], leaves: [], cactus: [],
+  // Trees and other placed blocks live in a sparse map; terrain is implicit in the heightmap
+  const extra = new Map()
+  const set = (x, y, z, kind) => extra.set(key(x, y, z), kind)
+  const setIfEmpty = (x, y, z, kind) => {
+    if (!extra.has(key(x, y, z)) && y > h(x, z)) set(x, y, z, kind)
   }
+  const trees = placeTrees(set, setIfEmpty)
   const r = rng(99)
-  const fill = biome.fillDepth ?? 6
-
-  for (let x = -half; x < half; x++) {
-    for (let z = -half; z < half; z++) {
+  const { kinds, chance, maxTop = Infinity, minAboveSea = 2 } = biome.trees
+  for (let x = -HALF + 3; x < HALF - 3; x++) {
+    for (let z = -HALF + 3; z < HALF - 3; z++) {
       const top = h(x, z)
-      const floor = Math.min(top, h(x + 1, z), h(x - 1, z), h(x, z + 1), h(x, z - 1)) - 1
-      for (let y = top; y >= Math.max(floor, top - fill); y--) {
-        blocks[biome.surface(top, top - y, { sea })].push(x, y, z)
+      if (top < sea + minAboveSea || top > maxTop || Math.abs(x) + Math.abs(z) < 5 || r() > chance) continue
+      const kind = pickWeighted(kinds, r)
+      if (TREE_GROUND[kind].includes(ground(x, z))) trees[kind](x, top, z, r)
+    }
+  }
+  if (biome.snowyLeaves) {
+    for (const [k, kind] of extra) {
+      const above = extra.get(k + 1)
+      if (kind === 'leaves' && above !== 'leaves' && above !== 'log') extra.set(k, 'snowLeaves')
+    }
+  }
+
+  const blockAt = (x, y, z) => {
+    const top = h(x, z)
+    if (y <= top) return biome.surface(top, top - y, { sea })
+    return extra.get(key(x, y, z))
+  }
+  const solid = (x, y, z) => {
+    if (y <= h(x, z)) return true
+    const kind = extra.get(key(x, y, z))
+    return kind !== undefined && !SEE_THROUGH.has(kind)
+  }
+
+  // Mesh visible faces, grouped by texture
+  const light = biome.light ?? 1
+  const buffers = {}
+  const buffer = (tex) => (buffers[tex] ??= { pos: [], uv: [], col: [], idx: [] })
+  const toLinear = (v) => Math.min(1, v) ** 2.2
+
+  const addFace = (x, y, z, kind, f) => {
+    const face = FACES[f]
+    const [nx, ny, nz] = face.n
+    const axis = nx ? 0 : ny ? 1 : 2
+    const out = [x + nx, y + ny, z + nz]
+    const b = buffer(BLOCK_FACES[kind][f])
+    const start = b.pos.length / 3
+    const inset = INSET[kind] ?? 0
+    const aos = []
+    const corners = [[0, 0], [1, 0], [1, 1], [0, 1]]
+    for (const [i, j] of corners) {
+      const p = [x - 0.5, y - 0.5, z - 0.5]
+      p[axis] += face.n[axis] > 0 ? 1 - (axis === 1 ? 0 : inset) : axis === 1 ? 0 : inset
+      p[face.u] += i
+      p[face.v] += j
+      b.pos.push(...p)
+      b.uv.push(i, j)
+      // Ambient occlusion from the three blocks touching this corner, outside the face
+      const su = i ? 1 : -1, sv = j ? 1 : -1
+      const s1 = [...out]; s1[face.u] += su
+      const s2 = [...out]; s2[face.v] += sv
+      const c = [...out]; c[face.u] += su; c[face.v] += sv
+      const a = solid(...s1), bb = solid(...s2), cc = solid(...c)
+      const ao = a && bb ? 0 : 3 - (a + bb + cc)
+      aos.push(ao)
+      const v = toLinear(face.shade * AO[ao] * light)
+      b.col.push(v, v, v)
+    }
+    // Wind the quad to face outward, and flip its diagonal to keep the shading smooth
+    const e1 = [0, 1, 2].map((k) => b.pos[(start + 1) * 3 + k] - b.pos[start * 3 + k])
+    const e2 = [0, 1, 2].map((k) => b.pos[(start + 3) * 3 + k] - b.pos[start * 3 + k])
+    const cross = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]
+    const outward = cross[0] * nx + cross[1] * ny + cross[2] * nz > 0
+    const flip = aos[0] + aos[2] < aos[1] + aos[3]
+    const q = outward ? [0, 1, 2, 3] : [0, 3, 2, 1]
+    const tri = flip ? [q[1], q[2], q[3], q[1], q[3], q[0]] : [q[0], q[1], q[2], q[0], q[2], q[3]]
+    b.idx.push(...tri.map((t) => start + t))
+  }
+
+  const meshBlock = (x, y, z, kind) => {
+    for (let f = 0; f < 6; f++) {
+      const [nx, ny, nz] = FACES[f].n
+      if (f === 3 && y <= h(x, z)) continue // terrain bottoms are never visible
+      if (!solid(x + nx, y + ny, z + nz) || SEE_THROUGH.has(kind)) addFace(x, y, z, kind, f)
+    }
+  }
+
+  // Terrain: only the top few blocks of each column can ever show a face
+  for (let x = -HALF; x < HALF; x++) {
+    for (let z = -HALF; z < HALF; z++) {
+      const top = h(x, z)
+      const low = Math.min(top, h(x + 1, z), h(x - 1, z), h(x, z + 1), h(x, z - 1))
+      for (let y = top; y > low || y === top; y--) meshBlock(x, y, z, blockAt(x, y, z))
+    }
+  }
+  for (const [k, kind] of extra) {
+    const y = k % 256, xz = Math.floor(k / 256)
+    meshBlock(Math.floor(xz / 256) - 128, y, (xz % 256) - 128, kind)
+  }
+
+  // Plants: two crossed planes standing on the ground
+  const pr = rng(123)
+  const plantShade = toLinear(0.9 * light)
+  for (let x = -HALF; x < HALF; x++) {
+    for (let z = -HALF; z < HALF; z++) {
+      const top = h(x, z)
+      if (top <= sea || extra.has(key(x, top + 1, z))) continue
+      for (const [kind, odds, on] of biome.plants ?? []) {
+        if (ground(x, z) !== on || pr() > odds) continue
+        const b = buffer(kind)
+        const ox = (pr() - 0.5) * 0.3, oz = (pr() - 0.5) * 0.3
+        const s = 0.45
+        for (const [dx, dz] of [[1, 1], [1, -1]]) {
+          const start = b.pos.length / 3
+          b.pos.push(
+            x + ox - dx * s, top + 0.5, z + oz - dz * s,
+            x + ox + dx * s, top + 0.5, z + oz + dz * s,
+            x + ox + dx * s, top + 1.5, z + oz + dz * s,
+            x + ox - dx * s, top + 1.5, z + oz - dz * s,
+          )
+          b.uv.push(0, 0, 1, 0, 1, 1, 0, 1)
+          for (let i = 0; i < 4; i++) b.col.push(plantShade, plantShade, plantShade)
+          b.idx.push(start, start + 1, start + 2, start, start + 2, start + 3)
+        }
+        break
       }
     }
   }
 
-  // Trees and cacti, keeping the camera's spot clear
-  const leaves = new Set()
-  const { kind, chance, maxTop = Infinity, minAboveSea = 2 } = biome.trees
-  for (let x = -half + 3; x < half - 3; x++) {
-    for (let z = -half + 3; z < half - 3; z++) {
-      const top = h(x, z)
-      if (top < sea + minAboveSea || top > maxTop || Math.abs(x) + Math.abs(z) < 5 || r() > chance) continue
-      if (!TREE_GROUND[kind].includes(biome.surface(top, 0, { sea }))) continue
-      TREES[kind](x, top, z, r, blocks, leaves)
-    }
-  }
-  leaves.forEach((k) => blocks.leaves.push(...k.split(',').map(Number)))
-
-  // Only build the textures and materials this biome actually uses
+  // Turn buffers into meshes, one per texture
   const sources = worldTextures(biome.palette)
-  const mats = {}
-  const mat = (name) => {
-    if (!mats[name]) {
-      const t = texture(sources[name]())
-      mats[name] = new THREE.MeshLambertMaterial({ map: t })
-      disposables.push(t, mats[name])
-    }
-    return mats[name]
-  }
-  const sides = (side, top, bottom = top) => [side, side, top, bottom, side, side] // +x -x +y -y +z -z
-  const materials = {
-    grass: () => sides(mat('grassSide'), mat('grassTop'), mat('dirt')),
-    snowGrass: () => sides(mat('snowSide'), mat('snow'), mat('dirt')),
-    log: () => sides(mat('logSide'), mat('logTop')),
-    cactus: () => sides(mat('cactusSide'), mat('cactusTop')),
-  }
-  const SCALE = { cactus: [0.875, 1, 0.875] }
-
-  const box = new THREE.BoxGeometry(1, 1, 1)
-  const matrix = new THREE.Matrix4()
-  for (const [type, pos] of Object.entries(blocks)) {
-    const count = pos.length / 3
-    if (!count) continue
-    const mesh = new THREE.InstancedMesh(box, materials[type]?.() ?? mat(type), count)
-    const [sx, sy, sz] = SCALE[type] ?? [1, 1, 1]
-    for (let i = 0; i < count; i++) {
-      matrix.makeScale(sx, sy, sz).setPosition(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2])
-      mesh.setMatrixAt(i, matrix)
-    }
-    scene.add(mesh)
+  const PLANTS = new Set(['tallGrass', 'fern', 'poppy', 'dandelion', 'deadBush'])
+  for (const [tex, b] of Object.entries(buffers)) {
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3))
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(b.uv, 2))
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3))
+    geo.setIndex(b.idx)
+    const map = texture(sources[tex]())
+    const material = new THREE.MeshBasicMaterial({
+      map,
+      vertexColors: true,
+      ...(PLANTS.has(tex) && { alphaTest: 0.5, side: THREE.DoubleSide }),
+    })
+    scene.add(new THREE.Mesh(geo, material))
+    disposables.push(geo, map, material)
   }
 
   // Water (or ice) as one flat sheet at sea level
@@ -172,7 +310,12 @@ function buildWorld(scene, disposables, biome) {
   const frozen = biome.water === 'ice'
   const water = new THREE.Mesh(
     new THREE.PlaneGeometry(SIZE, SIZE),
-    new THREE.MeshLambertMaterial({ map: waterTex, transparent: !frozen, opacity: frozen ? 1 : 0.82 }),
+    new THREE.MeshBasicMaterial({
+      map: waterTex,
+      color: new THREE.Color().setScalar(toLinear(0.95 * light)),
+      transparent: !frozen,
+      opacity: frozen ? 1 : 0.8,
+    }),
   )
   water.rotation.x = -Math.PI / 2
   water.position.set(-0.5, sea + (frozen ? 0.5 : 0.4), -0.5)
@@ -184,6 +327,7 @@ function buildWorld(scene, disposables, biome) {
   const eyeY = Math.max(peak + 8, biome.minEye ?? 0)
 
   // Flat, blocky clouds that drift overhead
+  const box = new THREE.BoxGeometry(1, 1, 1)
   const clouds = new THREE.Group()
   const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, fog: false })
   for (let i = 0; i < biome.clouds; i++) {
@@ -238,10 +382,6 @@ export default function Panorama() {
     disposables.push(sky)
     scene.background = sky
     scene.fog = new THREE.Fog(...biome.fog)
-    scene.add(new THREE.AmbientLight(0xffffff, biome.light ?? 1.6))
-    const sun = new THREE.DirectionalLight(0xffffff, 1.6)
-    sun.position.set(0.6, 1, 0.35)
-    scene.add(sun)
 
     const { eyeY, clouds } = buildWorld(scene, disposables, biome)
     const camera = new THREE.PerspectiveCamera(72, 1, 0.1, 200)
@@ -261,17 +401,16 @@ export default function Panorama() {
 
     let raf, last = performance.now()
     const tick = (now) => {
+      raf = requestAnimationFrame(tick)
+      if (!motionRef.current || now - last < FRAME_MS) return
       const dt = Math.min((now - last) / 1000, 0.1)
       last = now
-      if (motionRef.current) {
-        camera.rotation.y += dt * TURN_SPEED
-        for (const c of clouds.children) {
-          c.position.x += dt * 0.8
-          if (c.position.x > 110) c.position.x -= 220
-        }
-        renderer.render(scene, camera)
+      camera.rotation.y += dt * TURN_SPEED
+      for (const c of clouds.children) {
+        c.position.x += dt * 0.8
+        if (c.position.x > 110) c.position.x -= 220
       }
-      raf = requestAnimationFrame(tick)
+      renderer.render(scene, camera)
     }
     raf = requestAnimationFrame(tick)
 
