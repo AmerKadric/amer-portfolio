@@ -49,7 +49,7 @@ export const textures = {
   leaves: () => paint(18, (x, y, r) => (r() < 0.18 ? vary([34, 74, 24], r, 20) : vary([58, 120, 38], r, 44))),
   water: () => paint(19, (x, y, r) => vary([54, 98, 214], r, 22)),
   // UI textures
-  button: () => paint(20, (x, y, r) => vary([112, 112, 112], r, 26)),
+  button: () => paint(20, (x, y, r) => vary([112, 112, 112], r, 9)),
 }
 
 // Expose UI textures to CSS as custom properties (pixelated via image-rendering).

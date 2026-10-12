@@ -1,6 +1,20 @@
 @tailwind base;
 @tailwind utilities;
 
+@font-face {
+  font-family: 'Monocraft';
+  src: url('/fonts/Monocraft.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Monocraft';
+  src: url('/fonts/Monocraft-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+
 :root {
   --text: #e8e8e8;
   --shadow: #3c3c3c;
@@ -9,7 +23,8 @@
   --green: #80ff20;
   --u: clamp(2px, 0.25vw, 3px); /* one "GUI pixel" */
   --tex-button: none; /* set at runtime from a generated texture */
-  font-family: 'Pixelify Sans', ui-monospace, monospace;
+  font-family: 'Monocraft', ui-monospace, monospace;
+  font-variant-ligatures: none;
 }
 
 html, body, #root { height: 100%; }
@@ -32,36 +47,38 @@ body {
 .panorama canvas.blurred { filter: blur(6px); transform: scale(1.04); }
 .panorama-shade { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.18); }
 
-/* ---------- Button ---------- */
+/* ---------- Button ----------
+   Game-style button: black outline, light top-left bevel,
+   dark bottom-right bevel, flat grey face with faint noise. */
 .mc-btn {
   position: relative;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   height: 52px; min-width: 0; padding: 0 14px;
-  font: 500 clamp(17px, 2.1vw, 21px)/1 'Pixelify Sans', monospace;
-  letter-spacing: 0.03em;
-  color: var(--text);
-  text-shadow: 2px 2px 0 var(--shadow);
+  font: 400 clamp(16px, 1.9vw, 19px)/1 'Monocraft', monospace;
+  color: #fff;
+  text-shadow: 2px 2px 0 #3f3f3f;
   white-space: nowrap;
-  background: #707070 var(--tex-button);
+  background: #6f6f6f var(--tex-button);
   background-size: 64px 64px;
   image-rendering: pixelated;
   border: 2px solid #000;
-  box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.32), inset -2px -4px 0 rgba(0, 0, 0, 0.42);
+  box-shadow: inset 2px 2px 0 #a9a9a9, inset -2px -4px 0 #555;
   cursor: pointer;
   user-select: none;
   text-decoration: none;
 }
-.mc-btn svg { width: 24px; height: 24px; filter: drop-shadow(2px 2px 0 var(--shadow)); }
+.mc-btn svg { width: 24px; height: 24px; filter: drop-shadow(2px 2px 0 #3f3f3f); }
 .mc-btn:hover, .mc-btn:focus-visible {
   outline: none;
   border-color: #fff;
   color: #ffffa0;
-  background-color: #8890c8;
-  background-blend-mode: multiply;
+  text-shadow: 2px 2px 0 #3f3f28;
+  background-color: #7d7d7d;
+  box-shadow: inset 2px 2px 0 #c4c4c4, inset -2px -4px 0 #5e5e5e;
 }
-.mc-btn:active { box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.45); }
+.mc-btn:active { filter: brightness(0.85); }
 .mc-btn:disabled {
-  cursor: default; color: #a0a0a0; text-shadow: none;
+  cursor: default; color: #a0a0a0; text-shadow: none; filter: none;
   background: #2c2c2c; border-color: #000; box-shadow: none;
 }
 .mc-btn.small { height: 40px; font-size: 16px; }
@@ -92,7 +109,7 @@ body {
 .splash {
   position: absolute; right: 2%; bottom: 8%;
   transform-origin: center;
-  font: 700 clamp(13px, 1.9vw, 24px)/1 'Pixelify Sans', monospace;
+  font: 700 clamp(13px, 1.9vw, 24px)/1 'Monocraft', monospace;
   color: var(--yellow);
   text-shadow: 2px 2px 0 #3f3f15;
   white-space: nowrap;
@@ -190,7 +207,7 @@ p { margin: 0; }
 .mc-input {
   align-self: center; width: min(560px, 100%);
   height: 38px; padding: 0 10px;
-  font: 17px 'Pixelify Sans', monospace; color: #fff;
+  font: 17px 'Monocraft', monospace; color: #fff;
   background: #000; border: 2px solid #a0a0a0; outline: none;
 }
 .mc-input:focus { border-color: #fff; }
@@ -208,7 +225,7 @@ div.entry:not([role]) { cursor: default; }
 .entry-icon {
   flex: 0 0 64px; height: 64px;
   display: grid; place-items: center;
-  font: 700 24px 'Silkscreen', monospace; color: #fff;
+  font: 700 24px 'Monocraft', monospace; color: #fff;
   text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45);
   border: 2px solid #000;
   background-image: var(--tex-button); background-size: 64px; background-blend-mode: overlay;
@@ -268,7 +285,7 @@ div.entry:not([role]) { cursor: default; }
 .slot svg { width: 22px; height: 22px; filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.45)); }
 .slot .item {
   width: 28px; height: 28px; display: grid; place-items: center;
-  font: 700 11px 'Silkscreen', monospace; text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+  font: 700 11px 'Monocraft', monospace; text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
   border: 2px solid rgba(0, 0, 0, 0.55);
   box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.3), inset -2px -2px 0 rgba(0, 0, 0, 0.3);
 }
