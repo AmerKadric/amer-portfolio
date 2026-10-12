@@ -53,13 +53,11 @@ export const experience = [
     description:
       'Built an Android app with a cross-functional team, powered by a multi-agent system of machine learning models, that turns unstructured voice and text input into structured, actionable data.',
     bullets: [
-      'Developed an Android application prototype on a team that converts unstructured voice and text input into structured data',
-      'Implemented front-end features and improved usability for message input, display, and navigation',
-      'Enhanced performance by optimizing message handling and reducing processing delays for large inputs',
-      'Assisted in implementing a structured data model to improve the accuracy and consistency of processed voice and text inputs',
-      'Collaborated with team members to define system architecture, data models, and feature requirements',
-      'Tested application functionality and resolved bugs to improve reliability and performance',
-      'Documented system design, use cases, and implementation details for future development',
+      'Collaborated on an AI/ML project to enhance battlefield communication and situational awareness by transforming unstructured voice and text inputs into structured data',
+      'Developed an Android application prototype integrating speech recognition and machine learning models to process and organize military communications',
+      'Designed and implemented front-end features and UI/UX improvements, enhancing message input, navigation, data presentation, and application usability',
+      'Performed functional testing, debugging, and performance optimization to improve application reliability and processing efficiency',
+      'Authored technical documentation, including system design specifications, software requirements, use cases, and implementation procedures',
     ],
     tags: ['Android Studio', 'Kotlin', 'Java', 'System Architecture', 'Agile', 'Documentation'],
   },
@@ -71,7 +69,7 @@ export const experience = [
     description:
       'Administrative and communication support in a fast-paced virtual environment.',
     bullets: [
-      'Answered incoming calls, greeted visitors, and managed outgoing emails while providing professional and timely communication support',
+      'Managed daily administrative operations, including incoming calls, visitor assistance, and email correspondence, ensuring professional and timely communication',
     ],
     tags: ['Communication', 'Organization', 'Remote Work', 'Customer Service'],
   },
