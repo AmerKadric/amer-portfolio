@@ -50,16 +50,10 @@ export const textures = {
   water: () => paint(19, (x, y, r) => vary([54, 98, 214], r, 22)),
   // UI textures
   button: () => paint(20, (x, y, r) => vary([112, 112, 112], r, 26)),
-  logo: () =>
-    paint(21, (x, y, r) => {
-      const crack = (x * 3 + y * 5) % 13 === 0 && r() < 0.5
-      return crack ? vary([168, 160, 153], r, 10) : vary([206, 199, 192], r, 14)
-    }),
 }
 
 // Expose UI textures to CSS as custom properties (pixelated via image-rendering).
 export function installCssTextures() {
   const root = document.documentElement.style
   root.setProperty('--tex-button', `url(${textures.button().toDataURL()})`)
-  root.setProperty('--tex-logo', `url(${textures.logo().toDataURL()})`)
 }

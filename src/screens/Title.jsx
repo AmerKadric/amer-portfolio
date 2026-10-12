@@ -11,27 +11,15 @@ const pick = (prev) => {
   return next
 }
 
-function LogoLine({ text, className }) {
-  // Two stacked copies: a dark extruded shadow behind, the stone-textured face in front
-  return (
-    <span className={`logo-line ${className}`}>
-      <span className="logo-back">{text}</span>
-      <span className="logo-face">{text}</span>
-    </span>
-  )
-}
-
 export default function Title() {
   const { splash } = useSettings()
   const [text, setText] = useState(() => pick())
-  const [first, ...rest] = profile.name.toUpperCase().split(' ')
 
   return (
     <main className="title-screen">
       <h1 className="sr-only">{profile.name} — Portfolio</h1>
       <div className="logo" aria-hidden="true">
-        <LogoLine text={`${first} ${rest.join(' ')}`} className="logo-name" />
-        <LogoLine text="PORTFOLIO" className="logo-sub" />
+        <img className="logo-img" src="/logo.webp" alt="" width="1921" height="633" />
         {splash && (
           <button
             type="button"
