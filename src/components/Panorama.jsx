@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { textures, rng } from '../lib/textures'
+import { worldTextures, rng } from '../lib/textures'
+import { BIOMES, pickBiome } from '../lib/biomes'
 import { useSettings } from '../lib/settings'
 
 // A procedurally generated voxel world, viewed from a hilltop by a slowly
 // turning camera — the same idea as a game's rotating menu panorama.
 
 const SIZE = 112
-const SEA = 10
 const TURN_SPEED = (Math.PI * 2) / 160 // one full turn every ~160s
 
 function makeNoise(seed) {
@@ -34,12 +34,64 @@ function texture(canvas) {
   return t
 }
 
-function buildWorld(scene, disposables) {
+// Tree shapes, each pushing block positions into `blocks`
+const TREES = {
+  oak(x, top, z, r, blocks, leaves) {
+    const trunk = 4 + Math.floor(r() * 2)
+    for (let y = 1; y <= trunk; y++) blocks.log.push(x, top + y, z)
+    for (let dy = trunk - 2; dy <= trunk + 1; dy++) {
+      const rad = dy >= trunk ? 1 : 2
+      for (let dx = -rad; dx <= rad; dx++) {
+        for (let dz = -rad; dz <= rad; dz++) {
+          if (dx === 0 && dz === 0 && dy <= trunk) continue
+          if (Math.abs(dx) === rad && Math.abs(dz) === rad && (dy === trunk + 1 || r() < 0.5)) continue
+          leaves.add(`${x + dx},${top + dy},${z + dz}`)
+        }
+      }
+    }
+  },
+  spruce(x, top, z, r, blocks, leaves) {
+    const trunk = 6 + Math.floor(r() * 3)
+    for (let y = 1; y <= trunk; y++) blocks.log.push(x, top + y, z)
+    leaves.add(`${x},${top + trunk + 1},${z}`)
+    for (let dy = trunk; dy >= 3; dy--) {
+      // narrow at the top, alternating wider/narrower rings below
+      const rad = trunk - dy < 2 ? 1 : 1 + ((trunk - dy) % 2)
+      for (let dx = -rad; dx <= rad; dx++) {
+        for (let dz = -rad; dz <= rad; dz++) {
+          if (dx === 0 && dz === 0) continue
+          if (Math.abs(dx) === rad && Math.abs(dz) === rad) continue
+          leaves.add(`${x + dx},${top + dy},${z + dz}`)
+        }
+      }
+    }
+  },
+  acacia(x, top, z, r, blocks, leaves) {
+    const [ddx, ddz] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(r() * 4)]
+    for (let y = 1; y <= 3; y++) blocks.log.push(x, top + y, z)
+    blocks.log.push(x + ddx, top + 4, z + ddz, x + 2 * ddx, top + 5, z + 2 * ddz)
+    const cx = x + 2 * ddx, cz = z + 2 * ddz
+    for (const [dy, rad] of [[6, 2], [7, 1]]) {
+      for (let dx = -rad; dx <= rad; dx++) {
+        for (let dz = -rad; dz <= rad; dz++) {
+          if (Math.abs(dx) === rad && Math.abs(dz) === rad) continue
+          leaves.add(`${cx + dx},${top + dy},${cz + dz}`)
+        }
+      }
+    }
+  },
+  cactus(x, top, z, r, blocks) {
+    const tall = 1 + Math.floor(r() * 3)
+    for (let y = 1; y <= tall; y++) blocks.cactus.push(x, top + y, z)
+  },
+}
+
+const TREE_GROUND = { oak: ['grass'], acacia: ['grass'], spruce: ['grass', 'snowGrass'], cactus: ['sand'] }
+
+function buildWorld(scene, disposables, biome) {
   const noise = makeNoise(7)
-  const heightAt = (x, z) => {
-    const n = noise(x * 0.045 + 40, z * 0.045 + 40)
-    return Math.round(4 + n * 22)
-  }
+  const { sea } = biome
+  const heightAt = (x, z) => Math.round(biome.height(noise(x * 0.045 + 40, z * 0.045 + 40)))
 
   const half = SIZE / 2
   const heights = []
@@ -49,115 +101,112 @@ function buildWorld(scene, disposables) {
   }
   const h = (x, z) => heights[x + half]?.[z + half] ?? heightAt(x, z)
 
-  const blocks = { grass: [], dirt: [], stone: [], sand: [], log: [], leaves: [] }
+  const blocks = {
+    grass: [], snowGrass: [], dirt: [], stone: [], sand: [], sandstone: [], snow: [],
+    log: [], leaves: [], cactus: [],
+  }
   const r = rng(99)
+  const fill = biome.fillDepth ?? 6
 
   for (let x = -half; x < half; x++) {
     for (let z = -half; z < half; z++) {
       const top = h(x, z)
       const floor = Math.min(top, h(x + 1, z), h(x - 1, z), h(x, z + 1), h(x, z - 1)) - 1
-      const beach = top <= SEA + 1
-      for (let y = top; y >= Math.max(floor, top - 6); y--) {
-        const depth = top - y
-        let type
-        if (depth === 0) type = beach ? 'sand' : top > 21 ? 'stone' : 'grass'
-        else if (depth < 4) type = beach ? 'sand' : 'dirt'
-        else type = 'stone'
-        blocks[type].push(x, y, z)
+      for (let y = top; y >= Math.max(floor, top - fill); y--) {
+        blocks[biome.surface(top, top - y, { sea })].push(x, y, z)
       }
     }
   }
 
-  // Trees on grass, keeping the camera's hilltop clear
+  // Trees and cacti, keeping the camera's spot clear
   const leaves = new Set()
-  for (let x = -half + 2; x < half - 2; x++) {
-    for (let z = -half + 2; z < half - 2; z++) {
+  const { kind, chance, maxTop = Infinity, minAboveSea = 2 } = biome.trees
+  for (let x = -half + 3; x < half - 3; x++) {
+    for (let z = -half + 3; z < half - 3; z++) {
       const top = h(x, z)
-      if (top <= SEA + 1 || top > 21 || Math.abs(x) + Math.abs(z) < 5 || r() > 0.022) continue
-      const trunk = 4 + Math.floor(r() * 2)
-      for (let y = 1; y <= trunk; y++) blocks.log.push(x, top + y, z)
-      for (let dy = trunk - 2; dy <= trunk + 1; dy++) {
-        const rad = dy >= trunk ? 1 : 2
-        for (let dx = -rad; dx <= rad; dx++) {
-          for (let dz = -rad; dz <= rad; dz++) {
-            if (dx === 0 && dz === 0 && dy <= trunk) continue
-            if (Math.abs(dx) === rad && Math.abs(dz) === rad && (dy === trunk + 1 || r() < 0.5)) continue
-            leaves.add(`${x + dx},${top + dy},${z + dz}`)
-          }
-        }
-      }
+      if (top < sea + minAboveSea || top > maxTop || Math.abs(x) + Math.abs(z) < 5 || r() > chance) continue
+      if (!TREE_GROUND[kind].includes(biome.surface(top, 0, { sea }))) continue
+      TREES[kind](x, top, z, r, blocks, leaves)
     }
   }
   leaves.forEach((k) => blocks.leaves.push(...k.split(',').map(Number)))
 
-  const tex = Object.fromEntries(Object.entries(textures).map(([k, fn]) => [k, texture(fn())]))
-  const mat = (t) => new THREE.MeshLambertMaterial({ map: t })
-  const m = {
-    grassTop: mat(tex.grassTop), grassSide: mat(tex.grassSide), dirt: mat(tex.dirt),
-    stone: mat(tex.stone), sand: mat(tex.sand), logSide: mat(tex.logSide), logTop: mat(tex.logTop),
-    leaves: mat(tex.leaves),
+  // Only build the textures and materials this biome actually uses
+  const sources = worldTextures(biome.palette)
+  const mats = {}
+  const mat = (name) => {
+    if (!mats[name]) {
+      const t = texture(sources[name]())
+      mats[name] = new THREE.MeshLambertMaterial({ map: t })
+      disposables.push(t, mats[name])
+    }
+    return mats[name]
   }
-  // BoxGeometry face order: +x, -x, +y, -y, +z, -z
+  const sides = (side, top, bottom = top) => [side, side, top, bottom, side, side] // +x -x +y -y +z -z
   const materials = {
-    grass: [m.grassSide, m.grassSide, m.grassTop, m.dirt, m.grassSide, m.grassSide],
-    dirt: m.dirt,
-    stone: m.stone,
-    sand: m.sand,
-    log: [m.logSide, m.logSide, m.logTop, m.logTop, m.logSide, m.logSide],
-    leaves: m.leaves,
+    grass: () => sides(mat('grassSide'), mat('grassTop'), mat('dirt')),
+    snowGrass: () => sides(mat('snowSide'), mat('snow'), mat('dirt')),
+    log: () => sides(mat('logSide'), mat('logTop')),
+    cactus: () => sides(mat('cactusSide'), mat('cactusTop')),
   }
+  const SCALE = { cactus: [0.875, 1, 0.875] }
 
   const box = new THREE.BoxGeometry(1, 1, 1)
   const matrix = new THREE.Matrix4()
   for (const [type, pos] of Object.entries(blocks)) {
     const count = pos.length / 3
-    const mesh = new THREE.InstancedMesh(box, materials[type], count)
+    if (!count) continue
+    const mesh = new THREE.InstancedMesh(box, materials[type]?.() ?? mat(type), count)
+    const [sx, sy, sz] = SCALE[type] ?? [1, 1, 1]
     for (let i = 0; i < count; i++) {
-      matrix.setPosition(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2])
+      matrix.makeScale(sx, sy, sz).setPosition(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2])
       mesh.setMatrixAt(i, matrix)
     }
     scene.add(mesh)
   }
 
-  // Water as one flat sheet at sea level
-  tex.water.wrapS = tex.water.wrapT = THREE.RepeatWrapping
-  tex.water.repeat.set(SIZE, SIZE)
+  // Water (or ice) as one flat sheet at sea level
+  const waterTex = texture(sources[biome.water]())
+  waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping
+  waterTex.repeat.set(SIZE, SIZE)
+  const frozen = biome.water === 'ice'
   const water = new THREE.Mesh(
     new THREE.PlaneGeometry(SIZE, SIZE),
-    new THREE.MeshLambertMaterial({ map: tex.water, transparent: true, opacity: 0.82 }),
+    new THREE.MeshLambertMaterial({ map: waterTex, transparent: !frozen, opacity: frozen ? 1 : 0.82 }),
   )
   water.rotation.x = -Math.PI / 2
-  water.position.set(-0.5, SEA + 0.4, -0.5)
+  water.position.set(-0.5, sea + (frozen ? 0.5 : 0.4), -0.5)
   scene.add(water)
 
-  // Flat, blocky clouds that drift overhead
   // Stand above the tallest ground nearby so the view opens over the landscape
-  let peak = SEA
+  let peak = sea
   for (let x = -7; x <= 7; x++) for (let z = -7; z <= 7; z++) peak = Math.max(peak, h(x, z))
-  const eyeY = peak + 8
+  const eyeY = Math.max(peak + 8, biome.minEye ?? 0)
+
+  // Flat, blocky clouds that drift overhead
   const clouds = new THREE.Group()
   const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, fog: false })
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < biome.clouds; i++) {
     const c = new THREE.Mesh(box, cloudMat)
     c.scale.set(8 + r() * 16, 2, 6 + r() * 12)
-    c.position.set((r() - 0.5) * 220, eyeY + 22 + r() * 3, (r() - 0.5) * 220)
+    c.position.set((r() - 0.5) * 220, Math.max(eyeY + 22, 52) + r() * 3, (r() - 0.5) * 220)
     clouds.add(c)
   }
   scene.add(clouds)
 
-  disposables.push(box, water.geometry, water.material, cloudMat, ...Object.values(m), ...Object.values(tex))
+  disposables.push(box, water.geometry, water.material, waterTex, cloudMat)
   return { eyeY, clouds }
 }
 
-function skyTexture() {
+function skyTexture([top, mid, horizon]) {
   const c = document.createElement('canvas')
   c.width = 2
   c.height = 256
   const g = c.getContext('2d')
   const grad = g.createLinearGradient(0, 0, 0, 256)
-  grad.addColorStop(0, '#5f8fdc')
-  grad.addColorStop(0.55, '#a9c6f2')
-  grad.addColorStop(1, '#c4d8f6')
+  grad.addColorStop(0, top)
+  grad.addColorStop(0.55, mid)
+  grad.addColorStop(1, horizon)
   g.fillStyle = grad
   g.fillRect(0, 0, 2, 256)
   const t = new THREE.CanvasTexture(c)
@@ -167,7 +216,7 @@ function skyTexture() {
 
 export default function Panorama() {
   const canvasRef = useRef(null)
-  const { motion, blur } = useSettings()
+  const { motion, blur, biome: biomeSetting } = useSettings()
   const motionRef = useRef(motion)
   motionRef.current = motion
 
@@ -182,18 +231,19 @@ export default function Panorama() {
     // Rendered at reduced resolution: it is blurred anyway, and it keeps the pixel look
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1) * 0.6)
 
+    const biome = BIOMES[pickBiome(biomeSetting)]
     const disposables = []
     const scene = new THREE.Scene()
-    const sky = skyTexture()
+    const sky = skyTexture(biome.sky)
     disposables.push(sky)
     scene.background = sky
-    scene.fog = new THREE.Fog('#bcd2f4', 28, 62)
-    scene.add(new THREE.AmbientLight(0xffffff, 1.6))
+    scene.fog = new THREE.Fog(...biome.fog)
+    scene.add(new THREE.AmbientLight(0xffffff, biome.light ?? 1.6))
     const sun = new THREE.DirectionalLight(0xffffff, 1.6)
     sun.position.set(0.6, 1, 0.35)
     scene.add(sun)
 
-    const { eyeY, clouds } = buildWorld(scene, disposables)
+    const { eyeY, clouds } = buildWorld(scene, disposables, biome)
     const camera = new THREE.PerspectiveCamera(72, 1, 0.1, 200)
     camera.rotation.order = 'YXZ'
     camera.position.set(0.5, eyeY, 0.5)
@@ -231,7 +281,7 @@ export default function Panorama() {
       disposables.forEach((d) => d.dispose())
       renderer.dispose()
     }
-  }, [])
+  }, [biomeSetting])
 
   return (
     <div className="panorama" aria-hidden="true">
