@@ -84,7 +84,7 @@ export const projects = [
     icon: 'CP',
     color: '#2f6f9f',
     description:
-      'Common Operating Picture Completer — an Android app that turns unstructured voice and text into structured military reports using a multi-agent AI pipeline (urgency, sentiment, and entity extraction).',
+      'The COP-C Project is a project submitted to the National Security Innovation Network. This project leverages artificial intelligence (AI) and machine learning (ML) to enhance battlefield communication by digitizing information received through voice and text channels. The solution addresses the critical issue of integrating alternative communication mechanisms into digital workflows, thereby improving situational awareness and information dissemination across military units.',
     tags: ['Android Studio', 'Kotlin', 'Java', 'AI/ML', 'NLP', 'Biometric Auth'],
     status: 'Completed',
     github: null,
