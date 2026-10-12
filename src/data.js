@@ -79,7 +79,7 @@ export const experience = [
 
 export const projects = [
   {
-    title: 'COP Completer',
+    title: 'COP-C Project',
     year: 2025,
     icon: 'CP',
     color: '#2f6f9f',
