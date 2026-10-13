@@ -167,6 +167,7 @@ body {
 .footer-4 .screen-footer { width: min(980px, 100%); }
 
 .scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.scroll.fit { flex: 0 1 auto; } /* only as tall as its contents, still scrolls if the screen is short */
 .scroll::-webkit-scrollbar { width: 10px; }
 .scroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
 .scroll::-webkit-scrollbar-thumb {
@@ -244,7 +245,7 @@ div.entry:not([role]) { cursor: default; }
 }
 .entry-icon svg { width: 30px; height: 30px; filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.5)); }
 .entry-main { flex: 1; min-width: 0; }
-.entry-main p { margin-top: 3px; font-size: 16px; line-height: 1.35; color: #cfcfcf; }
+.entry-main p { margin-top: 3px; font-size: 16px; line-height: 1.35; color: #cfcfcf; overflow-wrap: anywhere; }
 .entry-main p.value { color: #fff; }
 .entry-status {
   display: flex; flex-direction: column; align-items: flex-end; gap: 4px;

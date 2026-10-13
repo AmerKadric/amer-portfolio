@@ -13,7 +13,7 @@ const rows = [
 export default function Contact() {
   return (
     <Screen title="Contact">
-      <div className="panel scroll">
+      <div className="panel scroll fit">
         {rows.map(({ icon: Icon, color, title, value, href, note, external, download }) => {
           const Tag = href ? 'a' : 'div'
           const linkProps = href
