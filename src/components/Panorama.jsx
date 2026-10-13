@@ -74,6 +74,10 @@ const BLOCK_FACES = {
   pumpkin: sides('pumpkinSide', 'pumpkinTop'),
   log: sides('logSide', 'logTop'),
   birchLog: sides('birchSide', 'birchTop'),
+  darkOakLog: sides('darkOakSide', 'darkOakTop'),
+  darkOakLeaves: all('darkOakLeaves'),
+  mushroomStem: all('mushroomStem'),
+  mushroomCap: sides('mushroomCap', 'mushroomCap', 'mushroomPores'),
   leaves: all('leaves'),
   birchLeaves: all('birchLeaves'),
   snowLeaves: sides('leaves', 'snowLeaves', 'leaves'),
@@ -85,6 +89,7 @@ const SEE_THROUGH = new Set(['cactus', 'leaves', 'birchLeaves', 'snowLeaves'])
 // Flat sprites drawn as two crossed planes (or lying flat, for lily pads)
 const PLANTS = new Set([
   'tallGrass', 'fern', 'poppy', 'dandelion', 'deadBush', 'redMushroom', 'brownMushroom', 'berryBush', 'sugarCane', 'lilyPad',
+  'oxeyeDaisy', 'pinkTulip',
 ])
 // Textures with holes in them (drawn with an alpha cutout)
 const CUTOUT = new Set(['leaves', 'birchLeaves', ...PLANTS])
@@ -168,6 +173,40 @@ function placeTrees(set, setIfEmpty) {
       canopy(cx, top + 7, cz, 1, 'leaves', r, true)
       canopy(x - ddx, top + 5, z - ddz, 1, 'leaves', r, true)
     },
+    // 2×2 trunk under a broad, flat canopy
+    darkOak(x, top, z, r) {
+      const trunk = 5 + Math.floor(r() * 3)
+      for (let y = 1; y <= trunk; y++) {
+        for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) set(x + dx, top + y, z + dz, 'darkOakLog')
+      }
+      const layer = (y, from, to, trim) => {
+        for (let dx = from; dx <= to; dx++) {
+          for (let dz = from; dz <= to; dz++) {
+            const edgeX = dx === from || dx === to, edgeZ = dz === from || dz === to
+            if (edgeX && edgeZ && (trim || r() < 0.6)) continue
+            setIfEmpty(x + dx, top + y, z + dz, 'darkOakLeaves')
+          }
+        }
+      }
+      layer(trunk - 1, -2, 3, false)
+      layer(trunk, -2, 3, true)
+      layer(trunk + 1, -1, 2, true)
+    },
+    // Giant red mushroom: pale stem under a domed, spotted cap
+    hugeMushroom(x, top, z, r) {
+      const stem = 4 + Math.floor(r() * 2)
+      for (let y = 1; y <= stem; y++) set(x, top + y, z, 'mushroomStem')
+      for (let dy = stem - 2; dy <= stem; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          for (let dz = -2; dz <= 2; dz++) {
+            if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue
+            if (Math.abs(dx) < 2 && Math.abs(dz) < 2) continue // hollow under the dome
+            setIfEmpty(x + dx, top + dy, z + dz, 'mushroomCap')
+          }
+        }
+      }
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) setIfEmpty(x + dx, top + stem + 1, z + dz, 'mushroomCap')
+    },
     cactus(x, top, z, r) {
       const tall = 1 + Math.floor(r() * 3)
       for (let y = 1; y <= tall; y++) set(x, top + y, z, 'cactus')
@@ -175,7 +214,10 @@ function placeTrees(set, setIfEmpty) {
   }
 }
 
-const TREE_GROUND = { oak: ['grass'], birch: ['grass'], acacia: ['grass'], spruce: ['grass', 'snowGrass'], cactus: ['sand'] }
+const TREE_GROUND = {
+  oak: ['grass'], birch: ['grass'], acacia: ['grass'], darkOak: ['grass'], hugeMushroom: ['grass'],
+  spruce: ['grass', 'snowGrass'], cactus: ['sand'],
+}
 
 function pickWeighted(kinds, r) {
   let roll = r()
@@ -549,7 +591,7 @@ function buildWorld(scene, disposables, biome, anisotropy, time) {
   // Eye level just above the nearby ground, like a player looking out from a hill
   let peak = sea
   for (let x = -7; x <= 7; x++) for (let z = -7; z <= 7; z++) peak = Math.max(peak, h(x, z))
-  const eyeY = peak + 5
+  const eyeY = peak + (biome.eyeLift ?? 5)
 
   // Cloud layer: two copies side by side so it can drift forever and wrap seamlessly
   const cloudGeo = cloudGeometry(biome.cloudCover ?? 0.35, 5)
@@ -631,7 +673,9 @@ export default function Panorama() {
     const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 220)
     camera.rotation.order = 'YXZ'
     camera.position.set(0.5, eyeY, 0.5)
-    camera.rotation.x = -0.1 // close to level, so the horizon and sky fill the view like the game's menu
+    // Close to level by default, so the horizon and sky fill the view like the game's menu;
+    // a biome can look down into a valley instead
+    camera.rotation.x = biome.pitch ?? -0.1
 
     let sizedW = 0, sizedH = 0
     const resize = () => {

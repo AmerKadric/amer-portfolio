@@ -3,7 +3,7 @@
 //
 // height(n, ridge, x, z): n is smooth noise (typically 0.26–0.73), ridge is 0–1
 // and peaks along sharp lines; x, z let a biome shape the scene around the camera.
-// half: world radius in blocks (default 56).
+// half: world radius in blocks (default 56). pitch / eyeLift: camera tilt and height above the ground.
 // trees.kinds: tree type → share of trees; trees.minDist keeps them that far from the camera. plants: [type, chance, ground block].
 // shore: plants along water. features: pumpkin patches and boulders.
 // animals: which mobs graze near the camera. cloudCover: 0–1 share of sky.
@@ -79,12 +79,12 @@ export const BIOMES = {
 
   mountains: {
     label: 'Mountains',
-    palette: { grass: [100, 152, 70], leaves: [52, 110, 44], bark: [92, 70, 44], ring: [150, 118, 76] },
+    palette: { grass: [96, 156, 64], leaves: [58, 120, 38], bark: [106, 84, 52], ring: [160, 128, 80] },
     sky: ['#4f86dc', '#9cc0f0', '#c8dbf6'],
     fog: ['#c3d6f3', 60, 150], // long view, with a light haze on the far peaks
-    half: 80, // a bigger world, so the range can sit at a distance
-    // Composed like a vista: a grassy meadow under the camera, a forested valley
-    // with lakes around it, and a ring of snowy peaks beyond
+    half: 80, // a bigger world, so the peaks can sit at a distance
+    // Looking down from a hilltop into a forested valley with lakes, ringed by
+    // wooded hills, with snowy peaks on the horizon
     height: (n, ridge, x, z) => {
       const ease = (from, to, v) => {
         const k = Math.min(1, Math.max(0, (v - from) / (to - from)))
@@ -92,36 +92,45 @@ export const BIOMES = {
       }
       const r = Math.hypot(x, z)
       const m = Math.min(1, Math.max(0, (n - 0.26) / 0.47)) // noise stretched to 0–1
-      const meadow = 26 + (n - 0.5) * 3
-      const valley = 7 + n * 5
-      const rangeStart = 40 + (n - 0.5) * 14 // the range's foot wanders closer and further around the circle
-      // Separate summits with saddles between them, rather than one even wall
-      const peakHeight = 12 + m * m * 36 + ridge * 12
-      const h = meadow + (valley - meadow) * ease(11, 24, r)
-      return h + ease(rangeStart, rangeStart + 16, r) * peakHeight
+      const valley = 2 + m * 12 // low spots fill with water
+      const hilltop = 30 + (n - 0.5) * 3
+      const hills = 24 + m * 12 + ridge * 4
+      const peaks = 38 + m * m * 18 + ridge * 6
+      let h = valley
+      h += (hilltop - valley) * (1 - ease(3, 17, r)) // the hill the camera stands on
+      h += (hills - valley) * ease(32, 46, r) // wooded hills around the valley
+      h += (peaks - hills) * ease(62, 78, r) // snowy range on the horizon
+      return h
     },
-    sea: 9,
+    sea: 10,
     water: 'water',
+    pitch: -0.36, // look down into the valley
+    eyeLift: 10, // stand tall enough to see over the slope
     surface: (top, depth, { sea }) => {
       if (depth === 0) {
-        if (top > 38) return 'snow'
-        if (top > 30) return 'stone'
+        if (top > 42) return 'snow'
+        if (top > 37) return 'stone'
         return top <= sea + 1 ? 'sand' : 'grass'
       }
-      if (depth < 3 && top <= 30) return top <= sea + 1 ? 'sand' : 'dirt'
+      if (depth < 3 && top <= 37) return top <= sea + 1 ? 'sand' : 'dirt'
       return 'stone'
     },
-    trees: { kinds: { spruce: 0.85, birch: 0.15 }, chance: 0.04, maxTop: 19, minDist: 15 }, // open meadow, forest on the valley floor
+    trees: {
+      kinds: { darkOak: 0.46, birch: 0.28, oak: 0.14, hugeMushroom: 0.07, spruce: 0.05 },
+      chance: 0.05,
+      maxTop: 37,
+      minDist: 14, // keep the hilltop and upper slope open so the view down isn't blocked
+    },
     plants: [
-      ['tallGrass', 0.14, 'grass'], ['dandelion', 0.012, 'grass'], ['poppy', 0.008, 'grass'],
-      ['brownMushroom', 0.002, 'grass'],
+      ['tallGrass', 0.12, 'grass'], ['oxeyeDaisy', 0.02, 'grass'], ['pinkTulip', 0.012, 'grass'],
+      ['dandelion', 0.01, 'grass'], ['poppy', 0.008, 'grass'],
     ],
-    shore: { sugarCane: 0.05, lilyPad: 0.03 },
+    shore: { sugarCane: 0.06, lilyPad: 0.03 },
     gravelPeaks: true,
-    features: { boulder: 0.0015, boulderBlock: 'mossyCobble' },
-    animals: { kinds: { sheep: 1 }, count: 7 },
+    features: { boulder: 0.0008, boulderBlock: 'mossyCobble' },
+    animals: { kinds: { sheep: 0.6, cow: 0.4 }, count: 5 },
     cloudCover: 0.3,
-    cloudHeight: 64, // above the peaks
+    cloudHeight: 78, // above the peaks
   },
 
   savanna: {

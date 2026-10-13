@@ -258,6 +258,35 @@ export function worldTextures(p) {
         return pick(ramp([40, 110, 40], [0.8, 0.95, 1.08]), r())
       }),
 
+    // Dark oak: deep brown bark and dense, dark leaves (opaque, like distant canopies in the game)
+    darkOakSide: () => {
+      const col = Array.from({ length: SIZE }, rng(71))
+      const bark = ramp([66, 46, 26], [0.62, 0.78, 0.9, 1, 1.12])
+      return paint(71, (x, y, r) => pick(bark, col[x] * 0.6 + r() * 0.4))
+    },
+    darkOakTop: () => paint(72, ringsPixel(ramp([66, 46, 26], [0.7, 0.85, 1, 1.1]), ramp([110, 84, 52], [0.86, 0.94, 1, 1.06]))),
+    darkOakLeaves: () => paint(73, (x, y, r) => pick(ramp([44, 92, 30], [0.62, 0.76, 0.9, 1.04]), r())),
+    // Giant mushrooms
+    mushroomStem: () => paint(74, (x, y, r) => pick(ramp([224, 218, 204], [0.88, 0.95, 1]), r())),
+    mushroomCap: () => {
+      const spots = new Set(['3,3', '4,3', '3,4', '11,2', '12,2', '11,3', '7,8', '8,8', '7,9', '13,11', '13,12', '2,12', '3,12'])
+      return paint(75, (x, y, r) => (spots.has(`${x},${y}`) ? [236, 232, 226] : pick(ramp([196, 34, 30], [0.84, 0.94, 1.04]), r())))
+    },
+    mushroomPores: () => paint(76, (x, y, r) => pick(ramp([214, 186, 160], [0.9, 1]), r())),
+    oxeyeDaisy: () =>
+      paint(77, (x, y) => {
+        if (y >= 9 && x === 7) return [72, 130, 46]
+        if (y >= 4 && y <= 8 && Math.abs(x - 7.5) + Math.abs(y - 6) < 3.4) return x >= 7 && x <= 8 && y >= 5 && y <= 6 ? [236, 200, 40] : [244, 244, 240]
+        return null
+      }),
+    pinkTulip: () =>
+      paint(78, (x, y) => {
+        if (y >= 9 && x === 7) return [64, 124, 44]
+        if (y === 10 && (x === 6 || x === 8)) return [76, 140, 50]
+        if (y >= 4 && y <= 8 && x >= 6 && x <= 9) return (x === 6 || x === 9) && y === 4 ? null : y < 6 ? [246, 170, 196] : [226, 130, 166]
+        return null
+      }),
+
     // Simple animal skins
     pigSkin: () => paint(64, (x, y, r) => pick(ramp([236, 160, 160], [0.94, 1, 1.03]), r())),
     pigFace: () =>
