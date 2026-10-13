@@ -8,11 +8,11 @@ export const ADVANCEMENTS = {
   start: { title: 'Getting Started', desc: 'Open your first section' },
   explorer: { title: 'Adventuring Time', desc: 'Visit every screen' },
   resume: { title: 'Paper Trail', desc: 'Download the resume' },
-  splash: { title: 'Splash Zone', desc: 'Reroll the splash text 10 times' },
+  splash: { title: 'Splash Zone', desc: 'Reroll the splash text twice' },
 }
 
 const SCREENS = ['experience', 'projects', 'about', 'skills', 'contact']
-const SPLASH_GOAL = 10
+const SPLASH_GOAL = 2
 
 let saved = load()
 let splashCount = 0
