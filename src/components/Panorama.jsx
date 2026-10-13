@@ -33,13 +33,19 @@ function makeNoise(seed) {
   return (x, z) => value(x, z) * 0.6 + value(x * 2.1, z * 2.1) * 0.28 + value(x * 4.3, z * 4.3) * 0.12
 }
 
-function texture(canvas) {
+// Crisp up close (nearest), and blended down with mipmaps in the distance so
+// far-off blocks don't turn into shimmering static
+function texture(canvas, anisotropy = 1) {
   const t = new THREE.CanvasTexture(canvas)
   t.magFilter = THREE.NearestFilter
-  t.minFilter = THREE.NearestFilter
+  t.minFilter = THREE.NearestMipmapLinearFilter
+  t.anisotropy = anisotropy
   t.colorSpace = THREE.SRGBColorSpace
   return t
 }
+
+// Render scale: low when blurred (no one can tell), full sharpness otherwise
+const pixelRatio = (blur) => (blur ? Math.min(window.devicePixelRatio, 1) * 0.6 : Math.min(window.devicePixelRatio, 1.5))
 
 // ---------- Blocks ----------
 
@@ -62,7 +68,11 @@ const BLOCK_FACES = {
   cactus: sides('cactusSide', 'cactusTop'),
 }
 const INSET = { cactus: 1 / 16 } // cactus sides sit one pixel in from the block edge
-const SEE_THROUGH = new Set(['cactus']) // doesn't hide neighbouring faces
+// Blocks you can see past, so they don't hide the faces next to them
+const SEE_THROUGH = new Set(['cactus', 'leaves', 'birchLeaves', 'snowLeaves'])
+// Textures with holes in them (drawn with an alpha cutout)
+const CUTOUT = new Set(['leaves', 'birchLeaves', 'tallGrass', 'fern', 'poppy', 'dandelion', 'deadBush'])
+const PLANTS = new Set(['tallGrass', 'fern', 'poppy', 'dandelion', 'deadBush'])
 
 const FACES = [
   { n: [1, 0, 0], u: 2, v: 1, shade: 0.6 },
@@ -73,6 +83,29 @@ const FACES = [
   { n: [0, 0, -1], u: 0, v: 1, shade: 0.8 },
 ]
 const AO = [0.5, 0.66, 0.82, 1] // corner brightness by number of open neighbours
+
+// Precomputed per face: its 4 corners (wound to face outward), each corner's
+// texture coords, and the 3 neighbouring blocks that darken that corner
+const FACE_DATA = FACES.map(({ n, u, v }) => {
+  const axis = n[0] ? 0 : n[1] ? 1 : 2
+  let corners = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([i, j]) => {
+    const p = [0, 0, 0]
+    p[axis] = n[axis] > 0 ? 1 : 0
+    p[u] += i
+    p[v] += j
+    const side1 = [...n], side2 = [...n], corner = [...n]
+    side1[u] += i ? 1 : -1
+    side2[v] += j ? 1 : -1
+    corner[u] += i ? 1 : -1
+    corner[v] += j ? 1 : -1
+    return { p, uv: [i, j], around: [side1, side2, corner] }
+  })
+  const [a, b, , d] = corners.map((c) => c.p)
+  const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [d[0] - a[0], d[1] - a[1], d[2] - a[2]]
+  const cross = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]
+  if (cross[0] * n[0] + cross[1] * n[1] + cross[2] * n[2] < 0) corners = [0, 3, 2, 1].map((k) => corners[k])
+  return { axis, corners }
+})
 
 const key = (x, y, z) => ((x + 128) * 256 + (z + 128)) * 256 + y
 
@@ -139,7 +172,7 @@ function pickWeighted(kinds, r) {
 
 // ---------- World ----------
 
-function buildWorld(scene, disposables, biome) {
+function buildWorld(scene, disposables, biome, anisotropy) {
   const noise = makeNoise(7)
   const ridgeNoise = makeNoise(13)
   const { sea } = biome
@@ -183,10 +216,17 @@ function buildWorld(scene, disposables, biome) {
     if (y <= top) return biome.surface(top, top - y, { sea })
     return extra.get(key(x, y, z))
   }
+  // Hides the face next to it
   const solid = (x, y, z) => {
     if (y <= h(x, z)) return true
     const kind = extra.get(key(x, y, z))
     return kind !== undefined && !SEE_THROUGH.has(kind)
+  }
+  // Darkens nearby corners (leaves count, like in the game; thin cactus doesn't)
+  const occludes = (x, y, z) => {
+    if (y <= h(x, z)) return true
+    const kind = extra.get(key(x, y, z))
+    return kind !== undefined && kind !== 'cactus'
   }
 
   // Mesh visible faces, grouped by texture
@@ -195,50 +235,42 @@ function buildWorld(scene, disposables, biome) {
   const buffer = (tex) => (buffers[tex] ??= { pos: [], uv: [], col: [], idx: [] })
   const toLinear = (v) => Math.min(1, v) ** 2.2
 
+  // Brightness for each face direction × corner occlusion level
+  const shadeLUT = FACES.map((face) => AO.map((ao) => toLinear(face.shade * ao * light)))
+
   const addFace = (x, y, z, kind, f) => {
-    const face = FACES[f]
-    const [nx, ny, nz] = face.n
-    const axis = nx ? 0 : ny ? 1 : 2
-    const out = [x + nx, y + ny, z + nz]
+    const { axis, corners } = FACE_DATA[f]
     const b = buffer(BLOCK_FACES[kind][f])
     const start = b.pos.length / 3
-    const inset = INSET[kind] ?? 0
-    const aos = []
-    const corners = [[0, 0], [1, 0], [1, 1], [0, 1]]
-    for (const [i, j] of corners) {
-      const p = [x - 0.5, y - 0.5, z - 0.5]
-      p[axis] += face.n[axis] > 0 ? 1 - (axis === 1 ? 0 : inset) : axis === 1 ? 0 : inset
-      p[face.u] += i
-      p[face.v] += j
-      b.pos.push(...p)
-      b.uv.push(i, j)
+    const inset = axis === 1 ? 0 : INSET[kind] ?? 0
+    let ao0, ao1, ao2, ao3
+    for (let k = 0; k < 4; k++) {
+      const { p, uv, around } = corners[k]
+      const [s1, s2, c] = around
+      const pos = [x - 0.5 + p[0], y - 0.5 + p[1], z - 0.5 + p[2]]
+      if (inset) pos[axis] += p[axis] ? -inset : inset
+      b.pos.push(pos[0], pos[1], pos[2])
+      b.uv.push(uv[0], uv[1])
       // Ambient occlusion from the three blocks touching this corner, outside the face
-      const su = i ? 1 : -1, sv = j ? 1 : -1
-      const s1 = [...out]; s1[face.u] += su
-      const s2 = [...out]; s2[face.v] += sv
-      const c = [...out]; c[face.u] += su; c[face.v] += sv
-      const a = solid(...s1), bb = solid(...s2), cc = solid(...c)
-      const ao = a && bb ? 0 : 3 - (a + bb + cc)
-      aos.push(ao)
-      const v = toLinear(face.shade * AO[ao] * light)
+      const e1 = occludes(x + s1[0], y + s1[1], z + s1[2])
+      const e2 = occludes(x + s2[0], y + s2[1], z + s2[2])
+      const ec = occludes(x + c[0], y + c[1], z + c[2])
+      const ao = e1 && e2 ? 0 : 3 - (e1 + e2 + ec)
+      if (k === 0) ao0 = ao; else if (k === 1) ao1 = ao; else if (k === 2) ao2 = ao; else ao3 = ao
+      const v = shadeLUT[f][ao]
       b.col.push(v, v, v)
     }
-    // Wind the quad to face outward, and flip its diagonal to keep the shading smooth
-    const e1 = [0, 1, 2].map((k) => b.pos[(start + 1) * 3 + k] - b.pos[start * 3 + k])
-    const e2 = [0, 1, 2].map((k) => b.pos[(start + 3) * 3 + k] - b.pos[start * 3 + k])
-    const cross = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]
-    const outward = cross[0] * nx + cross[1] * ny + cross[2] * nz > 0
-    const flip = aos[0] + aos[2] < aos[1] + aos[3]
-    const q = outward ? [0, 1, 2, 3] : [0, 3, 2, 1]
-    const tri = flip ? [q[1], q[2], q[3], q[1], q[3], q[0]] : [q[0], q[1], q[2], q[0], q[2], q[3]]
-    b.idx.push(...tri.map((t) => start + t))
+    // Flip the quad's diagonal where needed so the corner shading blends smoothly
+    if (ao0 + ao2 < ao1 + ao3) b.idx.push(start + 1, start + 2, start + 3, start + 1, start + 3, start)
+    else b.idx.push(start, start + 1, start + 2, start, start + 2, start + 3)
   }
+
 
   const meshBlock = (x, y, z, kind) => {
     for (let f = 0; f < 6; f++) {
       const [nx, ny, nz] = FACES[f].n
       if (f === 3 && y <= h(x, z)) continue // terrain bottoms are never visible
-      if (!solid(x + nx, y + ny, z + nz) || SEE_THROUGH.has(kind)) addFace(x, y, z, kind, f)
+      if (!solid(x + nx, y + ny, z + nz) || INSET[kind]) addFace(x, y, z, kind, f)
     }
   }
 
@@ -286,25 +318,25 @@ function buildWorld(scene, disposables, biome) {
 
   // Turn buffers into meshes, one per texture
   const sources = worldTextures(biome.palette)
-  const PLANTS = new Set(['tallGrass', 'fern', 'poppy', 'dandelion', 'deadBush'])
   for (const [tex, b] of Object.entries(buffers)) {
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3))
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(b.uv, 2))
     geo.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3))
     geo.setIndex(b.idx)
-    const map = texture(sources[tex]())
+    const map = texture(sources[tex](), anisotropy)
     const material = new THREE.MeshBasicMaterial({
       map,
       vertexColors: true,
-      ...(PLANTS.has(tex) && { alphaTest: 0.5, side: THREE.DoubleSide }),
+      ...(CUTOUT.has(tex) && { alphaTest: 0.5 }),
+      ...(PLANTS.has(tex) && { side: THREE.DoubleSide }),
     })
     scene.add(new THREE.Mesh(geo, material))
     disposables.push(geo, map, material)
   }
 
   // Water (or ice) as one flat sheet at sea level
-  const waterTex = texture(sources[biome.water]())
+  const waterTex = texture(sources[biome.water](), anisotropy)
   waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping
   waterTex.repeat.set(SIZE, SIZE)
   const frozen = biome.water === 'ice'
@@ -338,7 +370,15 @@ function buildWorld(scene, disposables, biome) {
   }
   scene.add(clouds)
 
-  disposables.push(box, water.geometry, water.material, waterTex, cloudMat)
+  // A square sun, in view when the page opens; the turning camera then sweeps past it
+  const sunGeo = new THREE.PlaneGeometry(16, 16)
+  const sunMat = new THREE.MeshBasicMaterial({ color: 0xfff6c8, fog: false })
+  const sun = new THREE.Mesh(sunGeo, sunMat)
+  sun.position.set(35, eyeY + 38, -120)
+  sun.lookAt(0.5, eyeY, 0.5)
+  scene.add(sun)
+
+  disposables.push(box, water.geometry, water.material, waterTex, cloudMat, sunGeo, sunMat)
   return { eyeY, clouds }
 }
 
@@ -363,6 +403,10 @@ export default function Panorama() {
   const { motion, blur, biome: biomeSetting } = useSettings()
   const motionRef = useRef(motion)
   motionRef.current = motion
+  const blurRef = useRef(blur)
+  blurRef.current = blur
+  const rendererRef = useRef(null)
+  const resizeRef = useRef(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -372,8 +416,8 @@ export default function Panorama() {
     } catch {
       return // No WebGL: the CSS sky gradient behind the canvas still shows
     }
-    // Rendered at reduced resolution: it is blurred anyway, and it keeps the pixel look
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1) * 0.6)
+    renderer.setPixelRatio(pixelRatio(blurRef.current))
+    rendererRef.current = renderer
 
     const biome = BIOMES[pickBiome(biomeSetting)]
     const disposables = []
@@ -383,20 +427,22 @@ export default function Panorama() {
     scene.background = sky
     scene.fog = new THREE.Fog(...biome.fog)
 
-    const { eyeY, clouds } = buildWorld(scene, disposables, biome)
+    const { eyeY, clouds } = buildWorld(scene, disposables, biome, renderer.capabilities.getMaxAnisotropy())
     const camera = new THREE.PerspectiveCamera(72, 1, 0.1, 200)
     camera.rotation.order = 'YXZ'
     camera.position.set(0.5, eyeY, 0.5)
     camera.rotation.x = -0.26
 
     const resize = () => {
-      const w = window.innerWidth, hgt = window.innerHeight
+      // Hidden or minimized windows can report 0×0; never let the camera's aspect go invalid
+      const w = Math.max(1, window.innerWidth), hgt = Math.max(1, window.innerHeight)
       renderer.setSize(w, hgt, false)
       camera.aspect = w / hgt
       camera.updateProjectionMatrix()
       renderer.render(scene, camera)
     }
     resize()
+    resizeRef.current = resize
     window.addEventListener('resize', resize)
 
     let raf, last = performance.now()
@@ -419,8 +465,16 @@ export default function Panorama() {
       window.removeEventListener('resize', resize)
       disposables.forEach((d) => d.dispose())
       renderer.dispose()
+      rendererRef.current = resizeRef.current = null
     }
   }, [biomeSetting])
+
+  // Switching blur on/off changes how sharply the world needs drawing
+  useEffect(() => {
+    if (!rendererRef.current) return
+    rendererRef.current.setPixelRatio(pixelRatio(blur))
+    resizeRef.current?.()
+  }, [blur])
 
   return (
     <div className="panorama" aria-hidden="true">

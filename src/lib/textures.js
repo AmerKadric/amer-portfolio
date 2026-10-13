@@ -1,4 +1,7 @@
 // Procedural 16×16 pixel textures — drawn in code so no game assets are used.
+//
+// Like hand-made pixel art, each block uses a small palette of distinct shades
+// (a "ramp") rather than smooth noise, which is what keeps it crisp.
 
 export function rng(seed) {
   let s = seed % 2147483647 || 1
@@ -7,11 +10,28 @@ export function rng(seed) {
 
 const SIZE = 16
 const clamp = (v) => Math.max(0, Math.min(255, v | 0))
-const vary = (base, r, amt) => {
-  const n = (r() - 0.5) * amt
-  return base.map((v) => clamp(v + n))
-}
 const shade = (c, f) => c.map((v) => clamp(v * f))
+
+// A few shades of one colour, darkest first
+const ramp = (base, factors) => factors.map((f) => shade(base, f))
+// Pick a shade from a ramp with t in 0–1
+const pick = (shades, t) => shades[Math.max(0, Math.min(shades.length - 1, Math.floor(t * shades.length)))]
+
+// Smooth, seamlessly tiling 16×16 noise built from a coarse cells×cells grid
+function tileNoise(seed, cells) {
+  const r = rng(seed)
+  const grid = Array.from({ length: cells * cells }, r)
+  const at = (gx, gy) => grid[((gy + cells) % cells) * cells + ((gx + cells) % cells)]
+  const step = SIZE / cells
+  return (x, y) => {
+    const fx = x / step, fy = y / step
+    const x0 = Math.floor(fx), y0 = Math.floor(fy)
+    const tx = fx - x0, ty = fy - y0
+    const top = at(x0, y0) * (1 - tx) + at(x0 + 1, y0) * tx
+    const bottom = at(x0, y0 + 1) * (1 - tx) + at(x0 + 1, y0 + 1) * tx
+    return top * (1 - ty) + bottom * ty
+  }
+}
 
 function paint(seed, pixel) {
   const c = document.createElement('canvas')
@@ -30,72 +50,121 @@ function paint(seed, pixel) {
   return c
 }
 
-const DIRT = [134, 96, 67]
-const SNOW = [238, 243, 250]
-const SAND = [219, 206, 160]
-const edge = Array.from({ length: SIZE }, (_, i) => 3 + ((i * 7) % 3 === 0 ? 1 : 0))
+const DIRT = ramp([134, 96, 67], [0.66, 0.82, 1, 1.12])
+const STONE = ramp([127, 127, 127], [0.68, 0.8, 0.92, 1.03, 1.13])
+const SAND = ramp([219, 206, 160], [0.88, 0.94, 1, 1.04])
+const SANDSTONE = ramp([216, 200, 148], [0.84, 0.92, 1, 1.05])
+const SNOW = ramp([240, 245, 252], [0.9, 0.95, 1])
+const BIRCH = ramp([222, 220, 210], [0.86, 0.93, 1])
+const CACTUS = ramp([82, 150, 56], [0.62, 0.8, 1, 1.12])
+const WATER = ramp([54, 98, 214], [0.84, 0.92, 1, 1.08])
+const ICE = ramp([146, 182, 238], [0.9, 0.97, 1.05, 1.14])
+
+// Dirt: mostly mid-brown with scattered darker and lighter specks
+const dirtPixel = (r) => {
+  const t = r()
+  return DIRT[t < 0.14 ? 0 : t < 0.42 ? 1 : t < 0.9 ? 2 : 3]
+}
+
+// Per-column length of the green "drips" hanging down a grass block's side
+const drips = (seed, base) => {
+  const r = rng(seed)
+  return Array.from({ length: SIZE }, () => base + Math.floor(r() * r() * 4))
+}
 
 // Block textures, tinted by a biome palette (grass, leaves, bark, ring)
 export function worldTextures(p) {
+  const GRASS = ramp(p.grass, [0.72, 0.84, 0.94, 1.04, 1.14])
+  const LEAVES = ramp(p.leaves, [0.6, 0.76, 0.9, 1.04])
+  const BARK = ramp(p.bark, [0.6, 0.76, 0.9, 1, 1.1])
+  const RING = ramp(p.ring, [0.82, 0.92, 1, 1.08])
+  const BIRCH_LEAVES = ramp([112, 156, 76], [0.62, 0.78, 0.92, 1.05])
+
+  const leafPixel = (shades) => (x, y, r) => (r() < 0.2 ? null : pick(shades, r()))
+  const ringsPixel = (bark, rings) => (x, y, r) => {
+    const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5))
+    if (d > 6.5) return pick(bark, r())
+    return rings[(Math.floor(d) % 2 ? 2 : 0) + (r() < 0.5 ? 1 : 0)]
+  }
+
   return {
-    stone: () => paint(11, (x, y, r) => vary([126, 126, 126], r, r() < 0.1 ? 70 : 30)),
-    dirt: () => paint(12, (x, y, r) => vary(DIRT, r, r() < 0.15 ? 60 : 26)),
-    grassTop: () => paint(13, (x, y, r) => vary(p.grass, r, 46)),
-    grassSide: () => paint(14, (x, y, r) => (y < edge[x] ? vary(p.grass, r, 40) : vary(DIRT, r, 26))),
-    snow: () => paint(22, (x, y, r) => vary(SNOW, r, 12)),
-    snowSide: () => paint(23, (x, y, r) => (y < edge[x] + 1 ? vary(SNOW, r, 12) : vary(DIRT, r, 26))),
-    sand: () => paint(15, (x, y, r) => vary(SAND, r, 22)),
-    sandstone: () => paint(24, (x, y, r) => vary(y % 5 === 4 ? [196, 180, 128] : [216, 200, 148], r, 14)),
-    logSide: () => paint(16, (x, y, r) => vary(x % 4 === 0 ? shade(p.bark, 0.74) : p.bark, r, 18)),
-    logTop: () =>
-      paint(17, (x, y, r) => {
-        const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5))
-        if (d > 6.5) return vary(p.bark, r, 18)
-        return vary(Math.floor(d) % 2 ? p.ring : shade(p.ring, 0.88), r, 14)
+    stone: () => {
+      const blot = tileNoise(41, 4)
+      return paint(11, (x, y, r) => pick(STONE, blot(x, y) * 0.65 + r() * 0.35))
+    },
+    dirt: () => paint(12, (x, y, r) => dirtPixel(r)),
+    grassTop: () => {
+      const patch = tileNoise(43, 8)
+      return paint(13, (x, y, r) => pick(GRASS, patch(x, y) * 0.45 + r() * 0.55))
+    },
+    grassSide: () => {
+      const len = drips(14, 2)
+      return paint(14, (x, y, r) => (y < len[x] ? pick(GRASS, 0.2 + r() * 0.8) : dirtPixel(r)))
+    },
+    snow: () => paint(22, (x, y, r) => pick(SNOW, r() * 0.6 + 0.4 * ((x * 3 + y * 5) % 7) / 7)),
+    snowSide: () => {
+      const len = drips(23, 3)
+      return paint(23, (x, y, r) => (y < len[x] ? pick(SNOW, r()) : dirtPixel(r)))
+    },
+    sand: () => paint(15, (x, y, r) => pick(SAND, r() < 0.1 ? 0 : 0.3 + r() * 0.7)),
+    sandstone: () =>
+      paint(24, (x, y, r) => {
+        if (y < 3) return pick(SANDSTONE, 0.55 + r() * 0.45) // lighter cap
+        if (y === 3 || y === 11) return SANDSTONE[0] // layer lines
+        return pick(SANDSTONE, 0.25 + r() * 0.6)
       }),
-    leaves: () => paint(18, (x, y, r) => (r() < 0.18 ? vary(shade(p.leaves, 0.6), r, 20) : vary(p.leaves, r, 44))),
+    logSide: () => {
+      const col = Array.from({ length: SIZE }, rng(16))
+      return paint(16, (x, y, r) => pick(BARK, col[x] * 0.65 + r() * 0.35))
+    },
+    logTop: () => paint(17, ringsPixel(BARK, RING)),
+    leaves: () => paint(18, leafPixel(LEAVES)),
+    birchSide: () => {
+      // white bark with short dark horizontal marks
+      const marks = new Set()
+      const r0 = rng(28)
+      for (let i = 0; i < 9; i++) {
+        const y = Math.floor(r0() * SIZE), x = Math.floor(r0() * SIZE), w = 2 + Math.floor(r0() * 3)
+        for (let k = 0; k < w; k++) marks.add(`${(x + k) % SIZE},${y}`)
+      }
+      return paint(28, (x, y, r) =>
+        marks.has(`${x},${y}`) ? (r() < 0.5 ? [52, 52, 48] : [86, 84, 76]) : pick(BIRCH, r()),
+      )
+    },
+    birchTop: () => paint(29, ringsPixel(BIRCH, ramp([200, 184, 130], [0.86, 0.94, 1, 1.06]))),
+    birchLeaves: () => paint(30, leafPixel(BIRCH_LEAVES)),
+    snowLeaves: () => paint(31, (x, y, r) => (r() < 0.25 ? pick(LEAVES, r()) : pick(SNOW, r()))),
     cactusSide: () =>
       paint(25, (x, y, r) => {
-        if (x === 0 || x === 15) return vary([40, 96, 30], r, 10)
-        if (x % 5 === 2 && y % 4 === 1) return [210, 220, 170] // spines
-        return vary(x % 5 === 2 ? [62, 124, 42] : [82, 150, 56], r, 16)
+        if (x === 0 || x === 15) return CACTUS[0]
+        if (x % 5 === 2 && y % 4 === 1) return [222, 228, 178] // spines
+        return x % 5 === 2 ? CACTUS[1] : pick(CACTUS, 0.5 + r() * 0.5)
       }),
-    cactusTop: () => paint(26, (x, y, r) => vary((x + y) % 4 === 0 ? [62, 124, 42] : [92, 162, 62], r, 14)),
-    birchSide: () =>
-      paint(28, (x, y, r) => {
-        const mark = (y % 6 === 2 && x > 3 && x < 9) || (y % 7 === 5 && x > 9 && x < 13)
-        return mark ? vary([40, 40, 36], r, 10) : vary([216, 214, 204], r, 14)
-      }),
-    birchTop: () =>
-      paint(29, (x, y, r) => {
-        const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5))
-        if (d > 6.5) return vary([216, 214, 204], r, 14)
-        return vary(Math.floor(d) % 2 ? [200, 184, 130] : [182, 166, 116], r, 12)
-      }),
-    birchLeaves: () => paint(30, (x, y, r) => (r() < 0.18 ? vary([70, 104, 46], r, 20) : vary([112, 156, 76], r, 40))),
-    snowLeaves: () => paint(31, (x, y, r) => (r() < 0.25 ? vary(shade(p.leaves, 0.8), r, 20) : vary(SNOW, r, 12))),
+    cactusTop: () => paint(26, (x, y, r) => ((x + y) % 4 === 0 ? CACTUS[1] : pick(CACTUS, 0.5 + r() * 0.5))),
+
     // Plants: drawn on transparent canvases and shown as two crossed planes
     tallGrass: () =>
       paint(32, (x, y, r) => {
         const blade = 4 + ((x * 7 + 3) % 9) // per-column blade height
-        return x % 2 === 0 && 15 - y < blade ? vary(p.grass, r, 36) : null
+        return x % 2 === 0 && 15 - y < blade ? pick(GRASS, r()) : null
       }),
     fern: () =>
       paint(33, (x, y, r) => {
         const dx = Math.abs(x - 7.5)
         const frond = y > 3 && dx < (16 - y) * 0.55 && (x + y) % 3 !== 0
-        return frond ? vary(shade(p.leaves, 1.1), r, 30) : null
+        return frond ? pick(LEAVES, 0.4 + r() * 0.6) : null
       }),
     poppy: () =>
       paint(34, (x, y, r) => {
-        if (y >= 9 && (x === 7 || (y === 11 && x === 8))) return vary([60, 120, 40], r, 16)
-        if (y >= 4 && y <= 8 && Math.abs(x - 7.5) + Math.abs(y - 6) < 3.2) return vary(y < 6 ? [214, 36, 30] : [180, 24, 24], r, 18)
+        if (y >= 9 && (x === 7 || (y === 11 && x === 8))) return y === 11 && x === 8 ? [76, 140, 48] : [56, 112, 38]
+        if (y >= 4 && y <= 8 && Math.abs(x - 7.5) + Math.abs(y - 6) < 3.2) return y < 6 ? [222, 40, 32] : [176, 22, 22]
+        if (y === 6 && (x === 7 || x === 8)) return [40, 20, 20]
         return null
       }),
     dandelion: () =>
       paint(35, (x, y, r) => {
-        if (y >= 10 && x === 7) return vary([70, 130, 44], r, 16)
-        if (y >= 6 && y <= 9 && x >= 6 && x <= 9) return vary([246, 210, 40], r, 22)
+        if (y >= 10 && x === 7) return [64, 124, 42]
+        if (y >= 6 && y <= 9 && x >= 6 && x <= 9) return (x + y) % 3 ? [250, 214, 40] : [226, 170, 20]
         return null
       }),
     deadBush: () =>
@@ -104,15 +173,15 @@ export function worldTextures(p) {
           (y >= 12 && x === 7) ||
           (y >= 6 && y < 12 && (x === 7 - Math.floor((12 - y) / 2) || x === 8 + Math.floor((12 - y) / 2))) ||
           (y >= 4 && y < 8 && x === 7)
-        return branch ? vary([120, 82, 40], r, 22) : null
+        return branch ? (r() < 0.5 ? [120, 82, 40] : [96, 64, 30]) : null
       }),
-    water: () => paint(19, (x, y, r) => vary([54, 98, 214], r, 22)),
-    ice: () => paint(27, (x, y, r) => vary(r() < 0.08 ? [200, 220, 250] : [146, 182, 238], r, 18)),
+    water: () => paint(19, (x, y, r) => pick(WATER, 0.5 + 0.35 * Math.sin((x + y * 2) * 0.8) + (r() - 0.5) * 0.3)),
+    ice: () => paint(27, (x, y, r) => ((x + y * 3) % 11 === 0 ? ICE[3] : pick(ICE, r() * 0.75))),
   }
 }
 
 const ui = {
-  button: () => paint(20, (x, y, r) => vary([112, 112, 112], r, 9)),
+  button: () => paint(20, (x, y, r) => shade([112, 112, 112], 0.96 + r() * 0.08)),
 }
 
 // Expose UI textures to CSS as custom properties (pixelated via image-rendering).
