@@ -5,6 +5,7 @@ const KEY = 'mc-portfolio-advancements'
 const TOAST_MS = 5000
 
 export const ADVANCEMENTS = {
+  start: { title: 'Getting Started', desc: 'Open your first section' },
   explorer: { title: 'Adventuring Time', desc: 'Visit every screen' },
   resume: { title: 'Paper Trail', desc: 'Download the resume' },
   splash: { title: 'Splash Zone', desc: 'Reroll the splash text 10 times' },
@@ -56,7 +57,9 @@ export function unlock(id) {
 }
 
 export function visitScreen(route) {
-  if (!SCREENS.includes(route) || saved.visited.includes(route)) return
+  if (!SCREENS.includes(route)) return
+  unlock('start')
+  if (saved.visited.includes(route)) return
   saved = { ...saved, visited: [...saved.visited, route] }
   save()
   if (SCREENS.every((s) => saved.visited.includes(s))) unlock('explorer')
@@ -69,6 +72,10 @@ export function rerollSplash() {
 function subscribe(cb) {
   listeners.add(cb)
   return () => listeners.delete(cb)
+}
+
+export function useUnlocked() {
+  return useSyncExternalStore(subscribe, () => saved.unlocked)
 }
 
 export function useToast() {

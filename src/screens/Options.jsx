@@ -1,6 +1,7 @@
 import Screen, { BackButton } from '../components/Screen'
 import { setSetting, useSettings } from '../lib/settings'
 import { BIOMES, BIOME_IDS } from '../lib/biomes'
+import { ADVANCEMENTS, useUnlocked } from '../lib/advancements'
 
 const OPTIONS = [
   ['sound', 'Sound'],
@@ -13,6 +14,8 @@ const BIOME_CYCLE = ['random', ...BIOME_IDS]
 
 export default function Options() {
   const settings = useSettings()
+  const unlocked = useUnlocked()
+  const ids = Object.keys(ADVANCEMENTS)
   const nextBiome = BIOME_CYCLE[(BIOME_CYCLE.indexOf(settings.biome) + 1) % BIOME_CYCLE.length]
 
   return (
@@ -32,6 +35,16 @@ export default function Options() {
         <button type="button" className="mc-btn" onClick={() => setSetting('biome', nextBiome)}>
           Biome: {BIOMES[settings.biome]?.label ?? 'Random'}
         </button>
+      </div>
+      <div className="advancements">
+        <h2>Advancements: {unlocked.length}/{ids.length}</h2>
+        <ul>
+          {ids.map((id) => (
+            <li key={id} className={unlocked.includes(id) ? 'done' : 'dim'}>
+              {unlocked.includes(id) ? ADVANCEMENTS[id].title : '???'}
+            </li>
+          ))}
+        </ul>
       </div>
     </Screen>
   )
