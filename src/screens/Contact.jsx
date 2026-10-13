@@ -7,7 +7,7 @@ const rows = [
   { icon: Linkedin, color: '#0a66c2', title: 'LinkedIn', value: profile.linkedin.replace(/^https:\/\/(www\.)?/, ''), href: profile.linkedin, external: true },
   { icon: Github, color: '#3a3a3a', title: 'GitHub', value: profile.github.replace(/^https:\/\//, ''), href: profile.github, external: true },
   { icon: FileDown, color: '#5d8f3a', title: 'Resume', value: 'Download PDF', href: profile.resume, download: true },
-  { icon: MapPin, color: '#8a6a3a', title: 'Location', value: profile.location, note: 'Open to remote and on-site roles.' },
+  { icon: MapPin, color: '#8a6a3a', title: 'Location', value: profile.location },
 ]
 
 export default function Contact() {
