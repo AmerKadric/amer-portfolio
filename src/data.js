@@ -116,7 +116,7 @@ export const projects = [
 
 export const about = {
   bio: [
-    "Hi, I'm Amer — a Bosnian-American Computer Science graduate from Wayne State University. I'm the IT Manager at Lady Jane's Haircuts for Men, keeping technology running across 101 salon locations nationwide.",
+    "Hi, I'm Amer — a Bosnian-American Computer Science graduate from Wayne State University. I'm the IT Manager at Lady Jane's Haircuts for Men, keeping technology running across over 100 salon locations nationwide.",
     'My work is real-world IT operations: LTE network infrastructure, Google Workspace, hardware and VoIP troubleshooting, websites, and the support that keeps a business running day to day. I take full ownership of the systems I manage.',
   ],
   facts: [
