@@ -105,8 +105,8 @@ export const projects = [
     icon: 'AK',
     color: '#5d8f3a',
     description:
-      'This site — a Minecraft-style title screen with a procedurally generated, rotating 3D voxel world built in Three.js. No game assets used.',
-    tags: ['React', 'Vite', 'Three.js', 'Web Audio', 'Vercel'],
+      'This site — a Minecraft-style title screen with a procedurally generated, rotating 3D voxel world drawn with a custom WebGL renderer. No game assets used.',
+    tags: ['React', 'Vite', 'WebGL', 'Web Workers', 'Web Audio', 'Vercel'],
     status: 'Deployed',
     github: 'https://github.com/AmerKadric/amer-portfolio',
     demo: null,
