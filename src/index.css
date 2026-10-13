@@ -45,6 +45,9 @@ body {
   image-rendering: pixelated;
 }
 .panorama canvas.blurred { filter: blur(6px); transform: scale(1.04); }
+/* the world fades in once the background thread has built it */
+.panorama canvas { opacity: 0; transition: opacity 0.6s ease-out; }
+.panorama canvas.ready { opacity: 1; }
 .panorama-shade { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.18); }
 
 /* ---------- Button ----------

@@ -20,7 +20,7 @@ export default function Title() {
     <main className="title-screen">
       <h1 className="sr-only">{profile.name} — Portfolio</h1>
       <div className="logo" aria-hidden="true">
-        <img className="logo-img" src="/logo.webp" alt="" width="1921" height="633" />
+        <img className="logo-img" src="/logo.webp" alt="" width="1600" height="527" fetchpriority="high" />
         {splash && (
           <button
             type="button"
