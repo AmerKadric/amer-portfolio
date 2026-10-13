@@ -12,7 +12,6 @@ export const profile = {
 }
 
 export const splashes = [
-  'Hire me!',
   'Over 100 locations!',
   'Turn it off and on again!',
   'Now with LTE!',
