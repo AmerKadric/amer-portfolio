@@ -397,6 +397,7 @@ div.entry:not([role]) { cursor: default; }
   .splash { right: 0; bottom: -4%; --splash-x: 0%; font-size: 12px; }
 }
 @media (max-height: 640px) { .corner-right, .corner-left .version { display: none; } }
+@media (max-width: 480px) { .corner-left .version { display: none; } }
 
 /* ---------- Advancement toast ---------- */
 .toast {

@@ -75,6 +75,9 @@ export default function App() {
         <a className="mc-btn square small" href="#/options" aria-label="Options">
           <Settings />
         </a>
+        <a className="mc-btn small" href="/quick-view/" title="Plain one-page summary">
+          Quick View
+        </a>
         {!route && <span className="version">{profile.version}</span>}
       </div>
 
