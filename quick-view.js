@@ -85,6 +85,16 @@ function render({ profile, experience, projects, about, skills }) {
   </section>
 
   <section>
+    <h2>Education</h2>
+    <article class="card">
+      <h3>${esc(edu.degree)} — ${esc(edu.school)}</h3>
+      <p class="meta">${esc(edu.college)} · ${esc(edu.period)}</p>
+      <p>${edu.stats.map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(' · ')}</p>
+      <p class="meta">Coursework: ${edu.coursework.map(esc).join(', ')}</p>
+    </article>
+  </section>
+
+  <section>
     <h2>Experience</h2>
     ${experience
       .map(
@@ -124,16 +134,6 @@ function render({ profile, experience, projects, about, skills }) {
         )
         .join('\n      ')}
     </div>
-  </section>
-
-  <section>
-    <h2>Education</h2>
-    <article class="card">
-      <h3>${esc(edu.degree)} — ${esc(edu.school)}</h3>
-      <p class="meta">${esc(edu.college)} · ${esc(edu.period)}</p>
-      <p>${edu.stats.map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(' · ')}</p>
-      <p class="meta">Coursework: ${edu.coursework.map(esc).join(', ')}</p>
-    </article>
   </section>
 
   <footer>© ${new Date().getFullYear()} ${esc(profile.name)} · ${link('/', 'amerkadric.com')}</footer>
