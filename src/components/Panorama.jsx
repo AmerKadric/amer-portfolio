@@ -12,8 +12,6 @@ import { useSettings } from '../lib/settings'
 // occlusion) with fixed per-face brightness — the classic blocky-game look,
 // with no real-time lights needed.
 
-const SIZE = 112
-const HALF = SIZE / 2
 const TURN_SPEED = (Math.PI * 2) / 160 // one full turn every ~160s
 const FRAME_MS = 1000 / 30 // cap at 30fps: plenty for a slow pan, kinder to batteries
 
@@ -272,7 +270,9 @@ function buildWorld(scene, disposables, biome, anisotropy, time) {
   const { sea } = biome
   const sunset = time === 'sunset'
   const ridge = (x, z) => Math.max(0, 1 - Math.abs(ridgeNoise(x * 0.08, z * 0.08) - 0.5) / 0.22)
-  const heightAt = (x, z) => Math.round(biome.height(noise(x * 0.045 + 40, z * 0.045 + 40), ridge(x, z)))
+  const heightAt = (x, z) => Math.round(biome.height(noise(x * 0.045 + 40, z * 0.045 + 40), ridge(x, z), x, z))
+  const HALF = biome.half ?? 56
+  const SIZE = HALF * 2
 
   const heights = new Int16Array(SIZE * SIZE)
   for (let x = -HALF; x < HALF; x++) {
@@ -308,11 +308,11 @@ function buildWorld(scene, disposables, biome, anisotropy, time) {
   }
   const trees = placeTrees(set, setIfEmpty)
   const r = rng(99)
-  const { kinds, chance, maxTop = Infinity, minAboveSea = 2 } = biome.trees
+  const { kinds, chance, maxTop = Infinity, minAboveSea = 2, minDist = 4 } = biome.trees
   for (let x = -HALF + 3; x < HALF - 3; x++) {
     for (let z = -HALF + 3; z < HALF - 3; z++) {
       const top = h(x, z)
-      if (top < sea + minAboveSea || top > maxTop || Math.abs(x) + Math.abs(z) < 5 || r() > chance) continue
+      if (top < sea + minAboveSea || top > maxTop || dist(x, z) < minDist || r() > chance) continue
       const kind = pickWeighted(kinds, r)
       if (TREE_GROUND[kind].includes(ground(x, z))) trees[kind](x, top, z, r)
     }
@@ -407,9 +407,11 @@ function buildWorld(scene, disposables, biome, anisotropy, time) {
     }
   }
 
-  // Terrain: only the top few blocks of each column can ever show a face
+  // Terrain: only the top few blocks of each column can ever show a face.
+  // The square's corners lie beyond the fog, so only a circle is built.
   for (let x = -HALF; x < HALF; x++) {
     for (let z = -HALF; z < HALF; z++) {
+      if (dist(x, z) > HALF) continue
       const top = h(x, z)
       const low = Math.min(top, h(x + 1, z), h(x - 1, z), h(x, z + 1), h(x, z - 1))
       for (let y = top; y > low || y === top; y--) meshBlock(x, y, z, blockAt(x, y, z))
@@ -417,7 +419,8 @@ function buildWorld(scene, disposables, biome, anisotropy, time) {
   }
   for (const [k, kind] of extra) {
     const y = k % 256, xz = Math.floor(k / 256)
-    meshBlock(Math.floor(xz / 256) - 128, y, (xz % 256) - 128, kind)
+    const x = Math.floor(xz / 256) - 128, z = (xz % 256) - 128
+    if (dist(x, z) <= HALF) meshBlock(x, y, z, kind)
   }
 
   // Plants: two crossed planes standing on the ground
@@ -445,6 +448,7 @@ function buildWorld(scene, disposables, biome, anisotropy, time) {
   const nearWater = (x, z) => h(x + 1, z) < sea || h(x - 1, z) < sea || h(x, z + 1) < sea || h(x, z - 1) < sea
   for (let x = -HALF; x < HALF; x++) {
     for (let z = -HALF; z < HALF; z++) {
+      if (dist(x, z) > HALF) continue
       const top = h(x, z)
       // Lily pads float on shallow water
       if (top < sea) {
@@ -530,7 +534,7 @@ function buildWorld(scene, disposables, biome, anisotropy, time) {
   waterTex.repeat.set(SIZE, SIZE)
   const frozen = biome.water === 'ice'
   const water = new THREE.Mesh(
-    new THREE.PlaneGeometry(SIZE, SIZE),
+    new THREE.CircleGeometry(HALF, 64), // round, to match the circle of terrain
     new THREE.MeshBasicMaterial({
       map: waterTex,
       color: tint.clone().multiplyScalar(toLinear(0.95 * light)),
@@ -539,13 +543,13 @@ function buildWorld(scene, disposables, biome, anisotropy, time) {
     }),
   )
   water.rotation.x = -Math.PI / 2
-  water.position.set(-0.5, sea + (frozen ? 0.5 : 0.4), -0.5)
+  water.position.set(0.5, sea + (frozen ? 0.5 : 0.4), 0.5)
   scene.add(water)
 
   // Eye level just above the nearby ground, like a player looking out from a hill
   let peak = sea
   for (let x = -7; x <= 7; x++) for (let z = -7; z <= 7; z++) peak = Math.max(peak, h(x, z))
-  const eyeY = Math.max(peak + 5, biome.minEye ?? 0)
+  const eyeY = peak + 5
 
   // Cloud layer: two copies side by side so it can drift forever and wrap seamlessly
   const cloudGeo = cloudGeometry(biome.cloudCover ?? 0.35, 5)
@@ -558,7 +562,7 @@ function buildWorld(scene, disposables, biome, anisotropy, time) {
   })
   const clouds = [0, -CLOUD_SPAN].map((offset) => {
     const m = new THREE.Mesh(cloudGeo, cloudMat)
-    m.position.set(offset, Math.max(eyeY + 24, 54), 0)
+    m.position.set(offset, biome.cloudHeight ?? Math.max(eyeY + 24, 54), 0)
     scene.add(m)
     return m
   })
