@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Volume2, VolumeX, Settings } from 'lucide-react'
 import Title from './screens/Title'
 import Experience from './screens/Experience'
@@ -8,14 +8,18 @@ import Skills from './screens/Skills'
 import Contact from './screens/Contact'
 import Options from './screens/Options'
 import Toast from './components/Toast'
+import Backdrop from './components/Backdrop'
 import { go, useRoute } from './lib/router'
 import { setSetting, useSettings } from './lib/settings'
 import { playClick } from './lib/sound'
 import { unlock, visitScreen } from './lib/advancements'
 import { profile } from './data'
+import { loadWorld, pickScene } from './lib/sceneLoader'
 
-// Three.js is the bulk of the bundle — load it after the menu has painted
-const Panorama = lazy(() => import('./components/Panorama'))
+// Three.js is the bulk of the bundle: start downloading it right away, in parallel
+// with the first render, rather than waiting until the menu has painted
+const panoramaModule = import('./components/Panorama')
+const Panorama = lazy(() => panoramaModule)
 
 const SCREENS = {
   experience: [Experience, 'Experience'],
@@ -28,7 +32,14 @@ const SCREENS = {
 
 export default function App() {
   const route = useRoute()
-  const { sound } = useSettings()
+  const { sound, biome: biomeSetting, time: timeSetting } = useSettings()
+  // Pick the scene once per setting change, and start building it in the background immediately
+  const scene = useMemo(() => {
+    const picked = pickScene(biomeSetting, timeSetting)
+    loadWorld(picked.biome, picked.time)
+    return picked
+  }, [biomeSetting, timeSetting])
+  const [worldReady, setWorldReady] = useState(false)
   const [Current, label] = SCREENS[route] ?? [Title, null]
 
   useEffect(() => visitScreen(route), [route])
@@ -54,8 +65,9 @@ export default function App() {
 
   return (
     <>
+      <Backdrop scene={scene} hidden={worldReady} />
       <Suspense fallback={null}>
-        <Panorama />
+        <Panorama scene={scene} onReady={setWorldReady} />
       </Suspense>
       <div className="screen-wrap" key={route}>
         <Current />

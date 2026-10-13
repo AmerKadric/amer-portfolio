@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { worldTextures } from '../lib/textures'
-import { BIOMES, SUNSET, pickBiome, pickTime } from '../lib/biomes'
-import { CLOUD_SPAN, CUTOUT, PLANTS, generateWorld } from '../lib/worldgen'
+import { BIOMES, SUNSET } from '../lib/biomes'
+import { CLOUD_SPAN, CUTOUT, PLANTS } from '../lib/worldgen'
+import { loadWorld } from '../lib/sceneLoader'
 import { useSettings } from '../lib/settings'
 
 // A procedurally generated voxel world, viewed from a hilltop by a slowly
@@ -106,27 +107,6 @@ function addWorld(scene, disposables, world, biome, anisotropy, time) {
   return { clouds, waterTex: frozen ? null : waterTex }
 }
 
-// Build the world in a Web Worker when possible; fall back to the main thread
-function requestWorld(biome, time, onReady) {
-  let worker
-  try {
-    worker = new Worker(new URL('../lib/worldgen.worker.js', import.meta.url), { type: 'module' })
-  } catch {
-    const timer = setTimeout(() => onReady(generateWorld(biome, time)))
-    return () => clearTimeout(timer)
-  }
-  worker.onmessage = ({ data }) => {
-    worker.terminate()
-    onReady(data.world)
-  }
-  worker.onerror = () => {
-    worker.terminate()
-    onReady(generateWorld(biome, time))
-  }
-  worker.postMessage({ biome, time })
-  return () => worker.terminate()
-}
-
 function skyTexture([top, mid, horizon]) {
   const c = document.createElement('canvas')
   c.width = 2
@@ -143,9 +123,9 @@ function skyTexture([top, mid, horizon]) {
   return t
 }
 
-export default function Panorama() {
+export default function Panorama({ scene: picked, onReady }) {
   const canvasRef = useRef(null)
-  const { motion, blur, biome: biomeSetting, time: timeSetting } = useSettings()
+  const { motion, blur } = useSettings()
   const [ready, setReady] = useState(false)
   const motionRef = useRef(motion)
   motionRef.current = motion
@@ -165,10 +145,10 @@ export default function Panorama() {
     renderer.setPixelRatio(pixelRatio(blurRef.current))
     rendererRef.current = renderer
     setReady(false)
+    onReady?.(false)
 
-    const biomeId = pickBiome(biomeSetting)
-    const biome = BIOMES[biomeId]
-    const time = pickTime(timeSetting)
+    const { time } = picked
+    const biome = BIOMES[picked.biome]
     const disposables = []
     const scene = new THREE.Scene()
     const sky = skyTexture(time === 'sunset' ? SUNSET.sky : biome.sky)
@@ -202,7 +182,7 @@ export default function Panorama() {
     let world = null
     let cancelled = false
     performance.mark('world-start')
-    const cancelWorld = requestWorld(biomeId, time, async (data) => {
+    loadWorld(picked.biome, time).then(async (data) => {
       if (cancelled) return
       performance.mark('world-add')
       const added = addWorld(scene, disposables, data, biome, renderer.capabilities.getMaxAnisotropy(), time)
@@ -215,6 +195,7 @@ export default function Panorama() {
       resize()
       performance.measure('world-build', 'world-start')
       setReady(true)
+      onReady?.(true)
     })
 
     let raf, last = performance.now(), drift = 0
@@ -239,14 +220,13 @@ export default function Panorama() {
 
     return () => {
       cancelled = true
-      cancelWorld()
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
       disposables.forEach((d) => d.dispose())
       renderer.dispose()
       rendererRef.current = resizeRef.current = null
     }
-  }, [biomeSetting, timeSetting])
+  }, [picked.biome, picked.time])
 
   // Switching blur on/off changes how sharply the world needs drawing
   useEffect(() => {
