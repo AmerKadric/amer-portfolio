@@ -7,9 +7,11 @@ import About from './screens/About'
 import Skills from './screens/Skills'
 import Contact from './screens/Contact'
 import Options from './screens/Options'
+import Toast from './components/Toast'
 import { go, useRoute } from './lib/router'
 import { setSetting, useSettings } from './lib/settings'
 import { playClick } from './lib/sound'
+import { unlock, visitScreen } from './lib/advancements'
 import { profile } from './data'
 
 // Three.js is the bulk of the bundle — load it after the menu has painted
@@ -29,6 +31,8 @@ export default function App() {
   const { sound } = useSettings()
   const [Current, label] = SCREENS[route] ?? [Title, null]
 
+  useEffect(() => visitScreen(route), [route])
+
   useEffect(() => {
     document.title = label ? `${label} | ${profile.name}` : `${profile.name} | ${profile.role}`
   }, [label])
@@ -38,6 +42,7 @@ export default function App() {
     const onClick = (e) => {
       const btn = e.target.closest('.mc-btn, .enchant-row, .slot-row, .entry')
       if (btn && !btn.disabled) playClick()
+      if (e.target.closest(`a[href="${profile.resume}"]`)) unlock('resume')
     }
     window.addEventListener('keydown', onKey)
     document.addEventListener('click', onClick)
@@ -55,6 +60,7 @@ export default function App() {
       <div className="screen-wrap" key={route}>
         <Current />
       </div>
+      <Toast />
 
       <div className="corner corner-left">
         <button
