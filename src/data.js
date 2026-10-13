@@ -6,7 +6,7 @@ export const profile = {
   location: 'Detroit, Michigan',
   email: 'hd0761@wayne.edu',
   github: 'https://github.com/AmerKadric',
-  linkedin: 'https://www.linkedin.com/in/amer-kadric',
+  linkedin: 'https://www.linkedin.com/in/amerkadric',
   resume: '/resume.pdf',
   version: 'Portfolio v2.0',
 }
