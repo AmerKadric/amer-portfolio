@@ -4,6 +4,8 @@
 // height(n, ridge): n is smooth noise (typically 0.26–0.73), ridge is 0–1 and
 // peaks along sharp lines — only the mountains use it.
 // trees.kinds: tree type → share of trees. plants: [type, chance, ground block].
+// shore: plants along water. features: pumpkin patches and boulders.
+// animals: which mobs graze near the camera. cloudCover: 0–1 share of sky.
 
 const forestSurface = (top, depth, { sea }) => {
   const beach = top <= sea + 1
@@ -23,8 +25,14 @@ export const BIOMES = {
     water: 'water',
     surface: forestSurface,
     trees: { kinds: { oak: 0.7, birch: 0.3 }, chance: 0.024, maxTop: 21 },
-    plants: [['tallGrass', 0.14, 'grass'], ['poppy', 0.012, 'grass'], ['dandelion', 0.016, 'grass']],
-    clouds: 26,
+    plants: [
+      ['tallGrass', 0.14, 'grass'], ['poppy', 0.012, 'grass'], ['dandelion', 0.016, 'grass'],
+      ['redMushroom', 0.003, 'grass'], ['brownMushroom', 0.003, 'grass'],
+    ],
+    shore: { sugarCane: 0.12, lilyPad: 0.05 },
+    features: { pumpkin: 0.0012, boulder: 0.0006, boulderBlock: 'mossyCobble' },
+    animals: { kinds: { sheep: 0.4, cow: 0.3, pig: 0.3 }, count: 8 },
+    cloudCover: 0.42,
   },
 
   taiga: {
@@ -42,8 +50,9 @@ export const BIOMES = {
     },
     trees: { kinds: { spruce: 1 }, chance: 0.03, maxTop: 22 },
     snowyLeaves: true,
-    plants: [['fern', 0.03, 'snowGrass']],
-    clouds: 34,
+    plants: [['fern', 0.03, 'snowGrass'], ['berryBush', 0.012, 'snowGrass']],
+    features: { boulder: 0.0016, boulderBlock: 'mossyCobble' },
+    cloudCover: 0.55,
     light: 0.92,
   },
 
@@ -62,7 +71,8 @@ export const BIOMES = {
     },
     trees: { kinds: { cactus: 1 }, chance: 0.012, minAboveSea: 1 },
     plants: [['deadBush', 0.014, 'sand']],
-    clouds: 8,
+    shore: { sugarCane: 0.18 },
+    cloudCover: 0.12,
     light: 1.06,
   },
 
@@ -89,8 +99,11 @@ export const BIOMES = {
       return 'stone'
     },
     trees: { kinds: { spruce: 0.8, oak: 0.2 }, chance: 0.02, maxTop: 22 },
-    plants: [['tallGrass', 0.08, 'grass']],
-    clouds: 20,
+    plants: [['tallGrass', 0.08, 'grass'], ['brownMushroom', 0.002, 'grass']],
+    gravelPeaks: true,
+    features: { boulder: 0.002, boulderBlock: 'cobble' },
+    animals: { kinds: { sheep: 1 }, count: 6 },
+    cloudCover: 0.32,
   },
 
   savanna: {
@@ -108,12 +121,27 @@ export const BIOMES = {
     surface: forestSurface,
     trees: { kinds: { acacia: 1 }, chance: 0.012, maxTop: 30 },
     plants: [['tallGrass', 0.22, 'grass']],
-    clouds: 14,
+    shore: { sugarCane: 0.08 },
+    features: { pumpkin: 0.0008 },
+    animals: { kinds: { cow: 0.6, sheep: 0.4 }, count: 7 },
+    cloudCover: 0.26,
     light: 1.06,
   },
 }
 
 export const BIOME_IDS = Object.keys(BIOMES)
+
+// Occasionally (1 in 4) a random visit lands at sunset
+export const TIMES = ['random', 'day', 'sunset']
+export const pickTime = (setting) => (setting === 'day' || setting === 'sunset' ? setting : Math.random() < 0.25 ? 'sunset' : 'day')
+
+export const SUNSET = {
+  sky: ['#34508f', '#d98d68', '#f4bb7c'],
+  fog: '#e8b088',
+  tint: '#ffd6b8', // warms every block
+  light: 0.82,
+  cloud: '#f3c3ae',
+}
 
 export function pickBiome(setting) {
   if (BIOMES[setting]) return setting

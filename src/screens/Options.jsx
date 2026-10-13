@@ -1,6 +1,6 @@
 import Screen, { BackButton } from '../components/Screen'
 import { setSetting, useSettings } from '../lib/settings'
-import { BIOMES, BIOME_IDS } from '../lib/biomes'
+import { BIOMES, BIOME_IDS, TIMES } from '../lib/biomes'
 import { ADVANCEMENTS, useUnlocked } from '../lib/advancements'
 
 const OPTIONS = [
@@ -17,6 +17,7 @@ export default function Options() {
   const unlocked = useUnlocked()
   const ids = Object.keys(ADVANCEMENTS)
   const nextBiome = BIOME_CYCLE[(BIOME_CYCLE.indexOf(settings.biome) + 1) % BIOME_CYCLE.length]
+  const nextTime = TIMES[(TIMES.indexOf(settings.time) + 1) % TIMES.length]
 
   return (
     <Screen title="Options" footer={<BackButton label="Done" />}>
@@ -34,6 +35,9 @@ export default function Options() {
         ))}
         <button type="button" className="mc-btn" onClick={() => setSetting('biome', nextBiome)}>
           Biome: {BIOMES[settings.biome]?.label ?? 'Random'}
+        </button>
+        <button type="button" className="mc-btn" onClick={() => setSetting('time', nextTime)}>
+          Time: {{ day: 'Day', sunset: 'Sunset' }[settings.time] ?? 'Random'}
         </button>
       </div>
       <div className="advancements">

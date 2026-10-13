@@ -4,7 +4,7 @@ const KEY = 'mc-portfolio-settings'
 const reducedMotion =
   typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
-const defaults = { sound: true, splash: true, motion: !reducedMotion, blur: true, biome: 'random' }
+const defaults = { sound: true, splash: true, motion: !reducedMotion, blur: true, biome: 'random', time: 'random' }
 
 let state = load()
 const listeners = new Set()

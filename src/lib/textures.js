@@ -66,6 +66,36 @@ const dirtPixel = (r) => {
   return DIRT[t < 0.14 ? 0 : t < 0.42 ? 1 : t < 0.9 ? 2 : 3]
 }
 
+// Stone with a few small clusters of ore pixels
+function oreTexture(seed, [dark, light]) {
+  const blot = tileNoise(41, 4)
+  const r0 = rng(seed)
+  const ore = new Set()
+  for (let i = 0; i < 4; i++) {
+    const cx = 2 + Math.floor(r0() * 12), cy = 2 + Math.floor(r0() * 12)
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1], [-1, 0], [0, -1]]) if (r0() < 0.75) ore.add(`${cx + dx},${cy + dy}`)
+  }
+  return paint(seed, (x, y, r) => (ore.has(`${x},${y}`) ? (r() < 0.6 ? dark : light) : pick(STONE, blot(x, y) * 0.65 + r() * 0.35)))
+}
+
+// Cobblestone: irregular stones with dark mortar lines, optionally mossy
+function cobbleTexture(seed, stones, moss) {
+  const r0 = rng(seed)
+  const seeds = Array.from({ length: 9 }, () => [r0() * 16, r0() * 16])
+  return paint(seed, (x, y, r) => {
+    // distance to nearest and second-nearest stone centre (wrapping), mortar where they're close
+    let d1 = 99, d2 = 99
+    for (const [sx, sy] of seeds) {
+      const dx = Math.min(Math.abs(x - sx), 16 - Math.abs(x - sx)), dy = Math.min(Math.abs(y - sy), 16 - Math.abs(y - sy))
+      const d = Math.hypot(dx, dy)
+      if (d < d1) { d2 = d1; d1 = d } else if (d < d2) d2 = d
+    }
+    if (d2 - d1 < 0.9) return STONE[0]
+    if (moss && r() < 0.35) return pick(moss, r())
+    return pick(stones, 0.35 + r() * 0.65)
+  })
+}
+
 // Per-column length of the green "drips" hanging down a grass block's side
 const drips = (seed, base) => {
   const r = rng(seed)
@@ -175,6 +205,90 @@ export function worldTextures(p) {
           (y >= 4 && y < 8 && x === 7)
         return branch ? (r() < 0.5 ? [120, 82, 40] : [96, 64, 30]) : null
       }),
+    // Stone with ore clusters showing in cliffs
+    coalOre: () => oreTexture(51, [[38, 38, 38], [58, 58, 58]]),
+    ironOre: () => oreTexture(52, [[216, 175, 147], [180, 132, 104]]),
+    gravel: () =>
+      paint(53, (x, y, r) => {
+        const t = r()
+        return t < 0.2 ? [96, 90, 88] : t < 0.45 ? [128, 122, 120] : t < 0.75 ? [150, 144, 140] : t < 0.9 ? [118, 104, 92] : [176, 170, 166]
+      }),
+    clay: () => paint(54, (x, y, r) => pick(ramp([160, 166, 178], [0.94, 0.98, 1, 1.03]), r())),
+    cobble: () => cobbleTexture(55, STONE, null),
+    mossyCobble: () => cobbleTexture(56, STONE, ramp([90, 116, 58], [0.8, 0.95, 1.08])),
+    pumpkinSide: () =>
+      paint(57, (x, y, r) => {
+        const rib = x % 4 === 0 || x === 15
+        return rib ? [180, 96, 18] : pick(ramp([226, 132, 28], [0.92, 1, 1.06]), r())
+      }),
+    pumpkinTop: () =>
+      paint(58, (x, y, r) => {
+        if (x >= 7 && x <= 8 && y >= 7 && y <= 8) return [96, 70, 30] // stem
+        const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5))
+        return Math.floor(d) % 3 === 0 ? [184, 100, 20] : pick(ramp([222, 128, 26], [0.92, 1, 1.05]), r())
+      }),
+    redMushroom: () =>
+      paint(59, (x, y) => {
+        if (y >= 10 && x >= 7 && x <= 8) return [226, 218, 196]
+        if (y >= 5 && y <= 9 && Math.abs(x - 7.5) < 4.5 - (9 - y) * 0.6) return (x * 3 + y) % 5 === 0 ? [240, 236, 230] : [200, 30, 30]
+        return null
+      }),
+    brownMushroom: () =>
+      paint(60, (x, y) => {
+        if (y >= 11 && x >= 7 && x <= 8) return [210, 200, 176]
+        if (y >= 8 && y <= 10 && Math.abs(x - 7.5) < 4 - (10 - y) * 0.8) return [150, 110, 80]
+        return null
+      }),
+    berryBush: () =>
+      paint(61, (x, y, r) => {
+        const bush = y > 4 && Math.abs(x - 7.5) < 7 - Math.abs(y - 10) * 0.4 && r() > 0.25
+        if (!bush) return null
+        return (x * 5 + y * 3) % 11 === 0 ? [196, 30, 52] : pick(LEAVES, 0.3 + r() * 0.7)
+      }),
+    sugarCane: () =>
+      paint(62, (x, y, r) => {
+        const stalk = x === 3 || x === 4 || x === 10 || x === 11 || ((x === 7 || x === 8) && y > 2)
+        if (!stalk) return null
+        return y % 5 === 0 ? [150, 186, 98] : pick(ramp([112, 168, 74], [0.85, 1, 1.1]), r())
+      }),
+    lilyPad: () =>
+      paint(63, (x, y, r) => {
+        const d = Math.hypot(x - 7.5, y - 7.5)
+        if (d > 7.2 || (x > 7 && Math.abs(y - 7.5) < x - 8.5)) return null // round with a notch
+        return pick(ramp([40, 110, 40], [0.8, 0.95, 1.08]), r())
+      }),
+
+    // Simple animal skins
+    pigSkin: () => paint(64, (x, y, r) => pick(ramp([236, 160, 160], [0.94, 1, 1.03]), r())),
+    pigFace: () =>
+      paint(65, (x, y, r) => {
+        if (y === 5 && (x === 3 || x === 12)) return [20, 20, 20] // eyes
+        if (y === 4 && (x === 2 || x === 13)) return [250, 250, 250]
+        if (y >= 9 && y <= 12 && x >= 5 && x <= 10) return x === 6 || x === 9 ? [140, 70, 70] : [246, 176, 176] // snout
+        return pick(ramp([236, 160, 160], [0.94, 1, 1.03]), r())
+      }),
+    cowHide: () => {
+      const spots = tileNoise(66, 4)
+      return paint(66, (x, y, r) => (spots(x, y) > 0.62 ? pick(ramp([232, 230, 224], [0.95, 1]), r()) : pick(ramp([74, 50, 34], [0.88, 1, 1.08]), r())))
+    },
+    cowFace: () =>
+      paint(67, (x, y, r) => {
+        if (y === 5 && (x === 3 || x === 12)) return [20, 20, 20]
+        if (y >= 10 && x >= 4 && x <= 11) return [200, 180, 170] // muzzle
+        if (x >= 6 && x <= 9 && y < 10) return [232, 230, 224] // blaze
+        return pick(ramp([74, 50, 34], [0.9, 1]), r())
+      }),
+    wool: () => paint(68, (x, y, r) => pick(ramp([236, 236, 230], [0.9, 0.96, 1]), r())),
+    sheepFace: () =>
+      paint(69, (x, y, r) => {
+        if (y < 4) return pick(ramp([236, 236, 230], [0.92, 1]), r()) // wool fringe
+        if (y === 7 && (x === 4 || x === 11)) return [30, 30, 30]
+        if (y === 7 && (x === 3 || x === 12)) return [250, 250, 250]
+        if (y >= 11 && x >= 6 && x <= 9) return [220, 170, 160]
+        return pick(ramp([214, 186, 156], [0.94, 1]), r())
+      }),
+    hoof: () => paint(70, (x, y, r) => pick(ramp([70, 54, 44], [0.9, 1]), r())),
+
     water: () => paint(19, (x, y, r) => pick(WATER, 0.5 + 0.35 * Math.sin((x + y * 2) * 0.8) + (r() - 0.5) * 0.3)),
     ice: () => paint(27, (x, y, r) => ((x + y * 3) % 11 === 0 ? ICE[3] : pick(ICE, r() * 0.75))),
   }
