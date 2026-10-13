@@ -3,6 +3,7 @@ import { Github, Linkedin } from 'lucide-react'
 import { profile, splashes } from '../data'
 import { useSettings } from '../lib/settings'
 import { playClick } from '../lib/sound'
+import { rerollSplash } from '../lib/advancements'
 
 const pick = (prev) => {
   let next
@@ -28,6 +29,7 @@ export default function Title() {
             onClick={() => {
               playClick()
               setText(pick(text))
+              rerollSplash()
             }}
           >
             {text}

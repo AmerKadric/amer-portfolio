@@ -35,3 +35,24 @@ export function playClick() {
     osc.stop(t + 0.1)
   } catch {}
 }
+
+// Two rising notes for the "Advancement Made!" toast.
+export function playChime() {
+  if (!getSettings().sound) return
+  try {
+    ctx ??= new (window.AudioContext || window.webkitAudioContext)()
+    const t = ctx.currentTime
+    ;[[660, 0], [990, 0.12]].forEach(([freq, delay]) => {
+      const osc = ctx.createOscillator()
+      const g = ctx.createGain()
+      osc.type = 'square'
+      osc.frequency.value = freq
+      g.gain.setValueAtTime(0.0001, t + delay)
+      g.gain.exponentialRampToValueAtTime(0.05, t + delay + 0.01)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + delay + 0.3)
+      osc.connect(g).connect(ctx.destination)
+      osc.start(t + delay)
+      osc.stop(t + delay + 0.32)
+    })
+  } catch {}
+}
