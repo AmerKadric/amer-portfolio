@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Volume2, VolumeX, Settings } from 'lucide-react'
 import Title from './screens/Title'
 import Experience from './screens/Experience'
@@ -9,6 +9,7 @@ import Contact from './screens/Contact'
 import Options from './screens/Options'
 import Toast from './components/Toast'
 import Backdrop from './components/Backdrop'
+import Panorama from './components/Panorama'
 import { go, useRoute } from './lib/router'
 import { setSetting, useSettings } from './lib/settings'
 import { playClick } from './lib/sound'
@@ -16,10 +17,6 @@ import { unlock, visitScreen } from './lib/advancements'
 import { profile } from './data'
 import { loadWorld, pickScene } from './lib/sceneLoader'
 
-// Three.js is the bulk of the bundle: start downloading it right away, in parallel
-// with the first render, rather than waiting until the menu has painted
-const panoramaModule = import('./components/Panorama')
-const Panorama = lazy(() => panoramaModule)
 
 const SCREENS = {
   experience: [Experience, 'Experience'],
@@ -66,9 +63,7 @@ export default function App() {
   return (
     <>
       <Backdrop scene={scene} hidden={worldReady} />
-      <Suspense fallback={null}>
-        <Panorama scene={scene} onReady={setWorldReady} />
-      </Suspense>
+      <Panorama scene={scene} onReady={setWorldReady} />
       <div className="screen-wrap" key={route}>
         <Current />
       </div>

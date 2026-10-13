@@ -45,7 +45,7 @@ body {
   position: fixed; inset: -5%; z-index: -2;
   background-size: cover; background-position: center top;
   filter: blur(14px) brightness(0.92);
-  transition: opacity 0.4s ease-out 0.35s; /* fade out only after the world has faded in */
+  transition: opacity 0.3s ease-out 0.1s; /* slip away underneath once the world is drawn */
 }
 .backdrop.hidden { opacity: 0; }
 .panorama canvas {
@@ -53,8 +53,8 @@ body {
   image-rendering: pixelated;
 }
 .panorama canvas.blurred { filter: blur(6px); transform: scale(1.04); }
-/* the world fades in once the background thread has built it */
-.panorama canvas { opacity: 0; transition: opacity 0.35s ease-out; }
+/* the world appears the moment the background thread has built it */
+.panorama canvas { opacity: 0; }
 .panorama canvas.ready { opacity: 1; }
 .panorama-shade { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.18); }
 
