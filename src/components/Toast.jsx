@@ -1,7 +1,7 @@
-import { Compass, FileText, Sparkles } from 'lucide-react'
+import { Compass, FileText, Flag, Sparkles } from 'lucide-react'
 import { useToast } from '../lib/advancements'
 
-const ICONS = { explorer: Compass, resume: FileText, splash: Sparkles }
+const ICONS = { start: Flag, explorer: Compass, resume: FileText, splash: Sparkles }
 
 // In-game style "Advancement Made!" popup, top-right.
 export default function Toast() {

@@ -377,6 +377,10 @@ div.entry:not([role]) { cursor: default; }
 
 /* Options */
 .options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: min(620px, 100%); margin: 20px auto 0; }
+.advancements { width: min(620px, 100%); margin: 24px auto 0; text-align: center; text-shadow: 2px 2px 0 var(--shadow); }
+.advancements h2 { margin: 0 0 10px; font-size: 17px; color: var(--yellow); }
+.advancements ul { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 18px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
+.advancements .done { color: var(--green); }
 
 /* ---------- Small screens ---------- */
 @media (max-width: 760px) {
