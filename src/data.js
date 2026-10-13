@@ -20,8 +20,7 @@ export const splashes = [
   '3.72 GPA!',
   'Uptime is a lifestyle!',
   'Detroit made!',
-  'Tier 1–2 certified fixer!',
-  'Ask me about Cradlepoint!',
+  'Certified fixer!',
   'Also try Lady Jane\'s!',
 ]
 
