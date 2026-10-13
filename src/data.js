@@ -82,7 +82,7 @@ export const projects = [
     icon: 'JD',
     color: '#b6903f',
     description:
-      'A complete rebuild of the live website for JD Capital Group, a business consulting and growth advisory firm in Birmingham, Michigan. Plain HTML, CSS, and JavaScript with no framework or build step — featuring a custom client-side router for smooth page transitions with clean URLs, photo-carousel and video case studies, a client showcase, and a working contact form.',
+      'A complete rebuild of the live website for JD Capital Group, a business consulting and growth advisory firm in Birmingham, Michigan. Built from scratch in HTML, CSS, and JavaScript with a custom client-side router for smooth page transitions and clean URLs, plus photo-carousel and video case studies, a client showcase, and a working contact form.',
     tags: ['HTML', 'CSS', 'JavaScript', 'Responsive Design', 'Vercel'],
     status: 'Live',
     github: 'https://github.com/AmerKadric/jd-capital-group-redesign',
