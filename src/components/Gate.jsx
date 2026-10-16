@@ -1,10 +1,8 @@
 import { useState } from 'react'
 import { playClick } from '../lib/sound'
+import { PASSCODE, UNLOCK_KEY as KEY } from '../lib/passcode'
 
-// Simple passcode screen shown before the site. It's a polite "keep out" for
-// casual visitors, not real security: the code ships with the page.
-const PASSCODE = '1946'
-const KEY = 'mc-portfolio-unlocked'
+// Simple passcode screen shown before the site (see lib/passcode.js)
 
 export function isUnlocked() {
   try {

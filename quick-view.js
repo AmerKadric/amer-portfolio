@@ -12,11 +12,12 @@ const esc = (s) =>
 const link = (href, text) => `<a href="${esc(href)}"${href.startsWith('http') ? ' rel="noopener"' : ''}>${esc(text)}</a>`
 
 async function loadData() {
-  const url = pathToFileURL(resolve('src/data.js')).href
-  return import(`${url}?t=${Date.now()}`)
+  const fresh = (file) => import(`${pathToFileURL(resolve(file)).href}?t=${Date.now()}`)
+  const [data, lock] = await Promise.all([fresh('src/data.js'), fresh('src/lib/passcode.js')])
+  return { ...data, lock }
 }
 
-function render({ profile, experience, projects, about, skills }) {
+function render({ profile, experience, projects, about, skills, lock }) {
   const edu = about.education
   const description = `${profile.name} — ${profile.role} in ${profile.location}. Experience, projects, skills, and education at a glance.`
 
@@ -34,6 +35,11 @@ function render({ profile, experience, projects, about, skills }) {
 <meta property="og:description" content="${esc(description)}" />
 <meta property="og:url" content="${SITE}/quick-view/" />
 <meta property="og:image" content="${SITE}/og-image.png" />
+<script>
+  // Same passcode screen as the main site: hide everything until unlocked this tab session
+  try { if (sessionStorage.getItem(${JSON.stringify(lock.UNLOCK_KEY)}) !== '1') document.documentElement.classList.add('locked') }
+  catch (e) { document.documentElement.classList.add('locked') }
+</script>
 <style>
   :root {
     --bg: #f6f6f4; --card: #fff; --text: #1d1d1b; --muted: #5d5d58; --line: #e2e2dc;
@@ -63,9 +69,42 @@ function render({ profile, experience, projects, about, skills }) {
   .tags li { background: var(--tag); border-radius: 4px; padding: 2px 8px; font-size: .82rem; }
   .skills { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
   footer { margin-top: 40px; color: var(--muted); font-size: .85rem; }
+
+  /* Passcode screen, matching the main site's */
+  @font-face { font-family: 'Monocraft'; src: url('/fonts/Monocraft.woff2') format('woff2'); font-display: swap; }
+  .gate { display: none; }
+  html.locked main { display: none; }
+  html.locked body { background: #4b4b4b; }
+  html.locked .gate { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; font-family: 'Monocraft', monospace; }
+  .gate form {
+    width: min(360px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 22px 20px;
+    background: rgba(0, 0, 0, .55); border: 2px solid #000; box-shadow: inset 0 0 0 2px #5b5b5b; color: #e8e8e8;
+  }
+  .gate h1 { margin: 0; text-align: center; font-size: 22px; text-shadow: 2px 2px 0 #3c3c3c; }
+  .gate input {
+    height: 38px; font: 22px 'Monocraft', monospace; letter-spacing: .3em; text-align: center;
+    color: #fff; background: #000; border: 2px solid #a0a0a0; outline: none;
+  }
+  .gate input:focus { border-color: #fff; }
+  .gate p { margin: -4px 0 0; min-height: 1.2em; text-align: center; font-size: 14px; color: #ff5555; }
+  .gate button {
+    height: 46px; font: 18px 'Monocraft', monospace; color: #fff; text-shadow: 2px 2px 0 #3f3f3f; cursor: pointer;
+    background: #6f6f6f; border: 2px solid #000; box-shadow: inset 2px 2px 0 #a9a9a9, inset -2px -4px 0 #555;
+  }
+  .gate button:hover, .gate button:focus-visible { outline: none; border-color: #fff; color: #ffffa0; background: #7d7d7d; }
+  .gate form.wrong { animation: shake .35s; }
+  @keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
 </style>
 </head>
 <body>
+<div class="gate">
+  <form>
+    <h1>Enter Passcode</h1>
+    <input type="password" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="Passcode" />
+    <p role="alert"></p>
+    <button type="submit">Enter</button>
+  </form>
+</div>
 <main>
   <a class="back" href="/">← Interactive version</a>
   <header>
@@ -138,6 +177,25 @@ function render({ profile, experience, projects, about, skills }) {
 
   <footer>© ${new Date().getFullYear()} ${esc(profile.name)} · ${link('/', 'amerkadric.com')}</footer>
 </main>
+<script>
+  ;(() => {
+    const form = document.querySelector('.gate form'), input = form.querySelector('input'), msg = form.querySelector('p')
+    if (document.documentElement.classList.contains('locked')) input.focus()
+    form.addEventListener('submit', (e) => {
+      e.preventDefault()
+      if (input.value === ${JSON.stringify(lock.PASSCODE)}) {
+        try { sessionStorage.setItem(${JSON.stringify(lock.UNLOCK_KEY)}, '1') } catch (err) {}
+        document.documentElement.classList.remove('locked')
+        return
+      }
+      msg.textContent = 'Incorrect passcode'
+      input.value = ''
+      form.classList.remove('wrong')
+      void form.offsetWidth // restart the shake
+      form.classList.add('wrong')
+    })
+  })()
+</script>
 </body>
 </html>
 `
