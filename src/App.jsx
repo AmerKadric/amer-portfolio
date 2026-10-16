@@ -10,6 +10,7 @@ import Options from './screens/Options'
 import Toast from './components/Toast'
 import Backdrop from './components/Backdrop'
 import Panorama from './components/Panorama'
+import Gate, { isUnlocked } from './components/Gate'
 import { go, useRoute } from './lib/router'
 import { setSetting, useSettings } from './lib/settings'
 import { playClick } from './lib/sound'
@@ -37,6 +38,7 @@ export default function App() {
     return picked
   }, [biomeSetting, timeSetting])
   const [worldReady, setWorldReady] = useState(false)
+  const [unlocked, setUnlocked] = useState(isUnlocked)
   const [Current, label] = SCREENS[route] ?? [Title, null]
 
   useEffect(() => visitScreen(route), [route])
@@ -64,6 +66,8 @@ export default function App() {
     <>
       <Backdrop scene={scene} hidden={worldReady} />
       <Panorama scene={scene} onReady={setWorldReady} />
+      {/* The world keeps building behind the passcode screen, so it's ready on unlock */}
+      {!unlocked ? <Gate onUnlock={() => setUnlocked(true)} /> : <>
       <div className="screen-wrap" key={route}>
         <Current />
       </div>
@@ -95,6 +99,7 @@ export default function App() {
           Not approved by or associated with Mojang or Microsoft.
         </footer>
       )}
+      </>}
     </>
   )
 }
