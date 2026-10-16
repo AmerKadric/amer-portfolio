@@ -225,6 +225,14 @@ export const MOBS = {
     { min: [-6, 21, 11], max: [-4, 24, 12], faces: all('sheepFace') }, // horns
     { min: [4, 21, 11], max: [6, 24, 12], faces: all('sheepFace') },
   ],
+  // Hostile, for the hidden game: arms held out in front, like the real thing
+  zombie: [
+    head([-4, 24, -4], [4, 32, 4], 'zombieSkin', 'zombieFace', 'zombieHair'),
+    { min: [-4, 12, -2], max: [4, 24, 2], faces: all('zombieShirt') },
+    { min: [-8, 20, -2], max: [-4, 24, 10], faces: all('zombieSkin') },
+    { min: [4, 20, -2], max: [8, 24, 10], faces: all('zombieSkin') },
+    leg(-4, -2, 12, 'zombiePants'), leg(0, -2, 12, 'zombiePants'),
+  ],
   sheep: [
     { min: [-5, 10, -8], max: [5, 20, 8], faces: all('wool') },
     leg(-5, -8, 10, 'wool'), leg(1, -8, 10, 'wool'), leg(-5, 4, 10, 'wool'), leg(1, 4, 10, 'wool'),

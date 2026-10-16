@@ -211,7 +211,7 @@ export function createRenderer(canvas) {
       canvas.height = Math.max(1, Math.round(height * ratio))
     },
 
-    // scene: { sky: [top, mid, horizon] (sRGB 0–1), fog: { color (linear), near, far }, ambient?, items: [...] }
+    // scene: { sky: [top, mid, horizon] (sRGB 0–1), fog: { color (linear), near, far }, ambient?, items: [...], overlay?: [...] }
     // camera: { fov, near, far, position, yaw, pitch }
     render(scene, camera) {
       gl.viewport(0, 0, canvas.width, canvas.height)
@@ -237,7 +237,7 @@ export function createRenderer(canvas) {
       gl.uniform1i(u.map, 0)
       gl.activeTexture(gl.TEXTURE0)
 
-      for (const item of scene.items) {
+      const draw = (item) => {
         if (item.cull === false) gl.disable(gl.CULL_FACE)
         else gl.enable(gl.CULL_FACE)
         if (item.blend) {
@@ -259,6 +259,15 @@ export function createRenderer(canvas) {
         if (item.mesh.constUv) gl.vertexAttrib2f(mesh.attrib('uv'), 0, 0)
         if (item.mesh.constCol) gl.vertexAttrib3f(mesh.attrib('color'), 1, 1, 1)
         gl.drawElements(item.mesh.lines ? gl.LINES : gl.TRIANGLES, item.mesh.count, gl.UNSIGNED_INT, 0)
+      }
+      scene.items.forEach(draw)
+
+      // Things held in the player's hand: drawn last, on top of the world, in camera space
+      if (scene.overlay?.length) {
+        gl.depthMask(true) // depth clears are skipped while writes are masked off
+        gl.clear(gl.DEPTH_BUFFER_BIT)
+        gl.uniformMatrix4fv(u.view, false, IDENTITY)
+        scene.overlay.forEach(draw)
       }
       gl.depthMask(true)
       gl.bindVertexArray(null)

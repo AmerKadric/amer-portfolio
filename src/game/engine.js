@@ -1,14 +1,17 @@
 // The hidden walk-around game: the background biome turned into an editable
-// block world, with first-person movement, block breaking/placing and a
-// day/night cycle. Drawn with the same tiny WebGL renderer as the panorama.
+// block world, with first-person movement, block breaking/placing, a
+// day/night cycle, health, an iron sword, and zombies at night. Drawn with the
+// same tiny WebGL renderer as the panorama.
 
 import { createRenderer, hexColor } from '../lib/gl'
 import { createMobs } from './mobs'
+import { chain, translate, rotateX, rotateY, rotateZ, scale } from '../lib/mat4'
+import { playHit, playHurt } from '../lib/sound'
 import { worldTextures } from '../lib/textures'
 import { SUNSET } from '../lib/biomes'
 import {
   planWorld, faceMesher, addPlant, packBuffers, cloudGeometry, toLinear,
-  BLOCK_FACES, FACES, INSET, SEE_THROUGH, PLANTS, CUTOUT, CLOUD_SPAN,
+  BLOCK_FACES, FACES, FACE_DATA, INSET, SEE_THROUGH, PLANTS, CUTOUT, CLOUD_SPAN,
 } from '../lib/worldgen'
 
 // ---------- Tuning ----------
@@ -24,9 +27,15 @@ const SPRINT = 6.2
 const PLAYER_W = 0.3 // half width
 const PLAYER_H = 1.8
 const EYE = 1.62
+export const MAX_HEALTH = 20 // 10 hearts
+const ATTACK_REACH = 3.5
+const ATTACK_COOLDOWN = 0.4
+const SWORD_DAMAGE = 6 // 3 hearts: a zombie takes 4 hits
+const FIST_DAMAGE = 1
 
-// Blocks the player can place, in hotbar order
-export const HOTBAR = ['grass', 'dirt', 'stone', 'cobble', 'planks', 'log', 'glass', 'sand', 'bricks']
+// Hotbar: the iron sword, then blocks to build with
+export const HOTBAR = ['ironSword', 'grass', 'dirt', 'stone', 'cobble', 'planks', 'log', 'glass', 'bricks']
+const isTool = (name) => name === 'ironSword'
 
 const NIGHT_SKY = ['#04060e', '#0b1226', '#18213d']
 const NIGHT_FOG = '#0e1424'
@@ -38,7 +47,7 @@ const smoothstep = (a, b, v) => {
 }
 const mix3 = (a, b, c, wa, wb, wc) => [0, 1, 2].map((i) => a[i] * wa + b[i] * wb + c[i] * wc)
 
-export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
+export function createGame(canvas, { biomeId, time }, { onUnderwater, onHealth, onHurt, onDeath } = {}) {
   const r = createRenderer(canvas)
   if (!r) return null
 
@@ -146,8 +155,11 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
   const cmin = Math.floor(-HALF / CHUNK), cmax = Math.floor((HALF - 1) / CHUNK)
   for (let cx = cmin; cx <= cmax; cx++) for (let cz = cmin; cz <= cmax; cz++) rebuildChunk(cx, cz)
 
-  // Animals that wander around
-  const mobs = createMobs({ renderer: r, plan, light, itemFor, blocks, nameAt, isWater, inCircle })
+  // Animals that wander around, and zombies at night
+  const mobs = createMobs({
+    renderer: r, plan, light, itemFor, blocks, nameAt, isWater, inCircle,
+    onAttackPlayer: (damage, fromX, fromZ) => hurtPlayer(damage, fromX, fromZ),
+  })
 
   // ---------- Sky things ----------
   const frozen = biome.water === 'ice'
@@ -179,15 +191,12 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
   const view = { sky: [], fog: { color: [0, 0, 0], near: fogNear, far: Math.max(fogFar, 90) }, ambient: [1, 1, 1], items: [] }
   let target = null // block the crosshair is on
 
+  // The world's draw lists only change when blocks do; creatures are added every frame
+  let before = [], after = []
   function collectItems() {
     const world = [...chunks.values()].flat()
-    view.items = [
-      stars, sun, moon,
-      ...world.filter((i) => i.layer === 0), ...mobs.items,
-      ...world.filter((i) => i.layer === 1), ...world.filter((i) => i.layer === 2),
-      water, ...clouds,
-      ...(target ? [outline] : []),
-    ]
+    before = [stars, sun, moon, ...world.filter((i) => i.layer === 0)]
+    after = [...world.filter((i) => i.layer === 1), ...world.filter((i) => i.layer === 2), water, ...clouds]
     itemsDirty = false
   }
 
@@ -209,7 +218,55 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     return { x: 0, y: topSolid(0, 0) + 0.5, z: 0 }
   })()
   const spawn = () => ({ ...spawnPoint })
-  const player = { ...spawn(), vx: 0, vy: 0, vz: 0, yaw: 0, pitch: -0.15, onGround: false, inWater: false }
+  const player = {
+    ...spawn(), vx: 0, vy: 0, vz: 0, kx: 0, kz: 0, yaw: 0, pitch: -0.15, onGround: false, inWater: false,
+    health: MAX_HEALTH, invulnerable: 0, sinceHurt: 99, regen: 0, dead: false, fallPeak: null,
+  }
+
+  // ---------- Health ----------
+  function hurtPlayer(amount, fromX, fromZ) {
+    const p = player
+    if (p.dead || (fromX != null && p.invulnerable > 0)) return
+    p.health = Math.max(0, p.health - amount)
+    p.invulnerable = 0.5
+    p.sinceHurt = 0
+    if (fromX != null) {
+      // Knocked back, away from whatever hit you
+      const dx = p.x - fromX, dz = p.z - fromZ, d = Math.hypot(dx, dz) || 1
+      p.kx = (dx / d) * 7
+      p.kz = (dz / d) * 7
+      p.vy = Math.max(p.vy, 5)
+    }
+    playHurt()
+    onHurt?.()
+    onHealth?.(p.health)
+    if (p.health === 0) {
+      p.dead = true
+      Object.assign(input, { forward: 0, strafe: 0, jump: false })
+      onDeath?.()
+    }
+  }
+
+  function respawn() {
+    Object.assign(player, spawn(), {
+      vx: 0, vy: 0, vz: 0, kx: 0, kz: 0, health: MAX_HEALTH, invulnerable: 1, sinceHurt: 99, dead: false, fallPeak: null,
+    })
+    onHealth?.(player.health)
+  }
+
+  // Health slowly comes back after a few seconds without being hurt
+  function heal(dt) {
+    const p = player
+    p.invulnerable = Math.max(0, p.invulnerable - dt)
+    p.sinceHurt += dt
+    if (p.dead || p.health >= MAX_HEALTH || p.sinceHurt < 4) return
+    p.regen += dt
+    if (p.regen >= 2.5) {
+      p.regen = 0
+      p.health = Math.min(MAX_HEALTH, p.health + 1)
+      onHealth?.(p.health)
+    }
+  }
 
   const cell = (v) => Math.round(v) // block b spans b-0.5 .. b+0.5
   function collides(px, py, pz) {
@@ -234,8 +291,12 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     let mz = -cos * input.forward - sin * input.strafe
     const len = Math.hypot(mx, mz)
     if (len > 1) { mx /= len; mz /= len }
-    p.vx = mx * speed
-    p.vz = mz * speed
+    // Knockback fades quickly and adds to your own movement
+    const drag = Math.max(0, 1 - dt * 8)
+    p.kx *= drag
+    p.kz *= drag
+    p.vx = mx * speed + p.kx
+    p.vz = mz * speed + p.kz
 
     if (p.inWater) {
       p.vy = Math.max(p.vy - 8 * dt, -2.5)
@@ -249,6 +310,7 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     const steps = Math.ceil(Math.max(Math.abs(p.vx), Math.abs(p.vy), Math.abs(p.vz)) * dt / 0.2) || 1
     const sdt = dt / steps
     let hitWall = false
+    const wasOnGround = p.onGround
     p.onGround = false
     for (let i = 0; i < steps; i++) {
       if (!collides(p.x + p.vx * sdt, p.y, p.z)) p.x += p.vx * sdt
@@ -272,7 +334,15 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
       p.x = 0.5 + ((p.x - 0.5) / d) * limit
       p.z = 0.5 + ((p.z - 0.5) / d) * limit
     }
-    if (p.y < -20) Object.assign(p, spawn(), { vy: 0 })
+    // Fall damage: more than 3 blocks hurts (landing in water is safe)
+    if (p.inWater) p.fallPeak = p.y
+    else if (!p.onGround) p.fallPeak = Math.max(p.fallPeak ?? p.y, p.y)
+    if (p.onGround) {
+      const fall = (p.fallPeak ?? p.y) - p.y
+      if (!wasOnGround && fall > 3.2) hurtPlayer(Math.floor(fall - 3))
+      p.fallPeak = p.y
+    }
+    if (p.y < -20) hurtPlayer(MAX_HEALTH) // fell out of the world
   }
 
   // ---------- Aiming ----------
@@ -281,8 +351,9 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     return [-Math.sin(player.yaw) * cp, Math.sin(player.pitch), -Math.cos(player.yaw) * cp]
   }
 
-  // Step through the block grid along the view ray (blocks are centred on integers)
-  function raycast() {
+  // Step through the block grid along the view ray (blocks are centred on integers).
+  // `throughPlants` lets attacks pass grass and flowers, like in the real game.
+  function raycast(throughPlants = false) {
     const o = [player.x + 0.5, player.y + EYE + 0.5, player.z + 0.5]
     const d = lookDir()
     const c = o.map(Math.floor)
@@ -292,7 +363,7 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     let prev = null
     for (let t = 0; t <= REACH; ) {
       const n = nameAt(c[0], c[1], c[2])
-      if (n !== 'air') return { hit: [...c], prev }
+      if (n !== 'air' && !(throughPlants && isPlant(n))) return { hit: [...c], prev }
       prev = [...c]
       const axis = tMax[0] < tMax[1] ? (tMax[0] < tMax[2] ? 0 : 2) : tMax[1] < tMax[2] ? 1 : 2
       t = tMax[axis]
@@ -312,6 +383,25 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     })
   }
 
+  // Left click / Break: hit a creature if one's in reach and in front of any block, otherwise break the block
+  let attackCooldown = 0
+  function primary() {
+    if (player.dead) return false
+    swing()
+    const eye = [player.x, player.y + EYE, player.z]
+    const hit = mobs.raycast(eye, lookDir(), ATTACK_REACH)
+    const block = raycast(true)
+    const blockDist = block ? Math.hypot(...block.hit.map((c, i) => c - eye[i])) - 0.5 : Infinity
+    if (hit && hit.distance < blockDist) {
+      if (attackCooldown > 0) return false
+      attackCooldown = ATTACK_COOLDOWN
+      mobs.damage(hit.mob, HOTBAR[selected] === 'ironSword' ? SWORD_DAMAGE : FIST_DAMAGE, player.x, player.z)
+      playHit()
+      return true
+    }
+    return breakBlock()
+  }
+
   function breakBlock() {
     const t = raycast()
     if (!t) return false
@@ -324,6 +414,7 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
   }
 
   function placeBlock() {
+    if (player.dead || isTool(HOTBAR[selected])) return false
     const t = raycast()
     if (!t?.prev) return false
     const [x, y, z] = t.prev
@@ -335,7 +426,80 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     if (Math.abs(x - p.x) < 0.5 + PLAYER_W && Math.abs(z - p.z) < 0.5 + PLAYER_W && y + 0.5 > p.y && y - 0.5 < p.y + PLAYER_H) return false
     grid[at(x, y, z)] = id[HOTBAR[selected]]
     changed(x, z)
+    swing()
     return true
+  }
+
+  // ---------- The item in your hand ----------
+  // Drawn on top of the world in camera space (x right, y up, looking down -z)
+  const handItems = {}
+  function handItemsFor(name) {
+    if (handItems[name]) return handItems[name]
+    if (name === 'ironSword') {
+      // A flat pixel sprite, stacked a few layers deep so it has some thickness
+      const pos = [], uv = [], idx = []
+      for (const z of [-0.035, -0.012, 0.012, 0.035]) {
+        const start = pos.length / 3
+        pos.push(-0.5, -0.5, z, 0.5, -0.5, z, 0.5, 0.5, z, -0.5, 0.5, z)
+        uv.push(0, 0, 1, 0, 1, 1, 0, 1)
+        idx.push(start, start + 1, start + 2, start, start + 2, start + 3)
+      }
+      const map = r.texture(sources.ironSword())
+      const shade = toLinear(light)
+      const col = new Float32Array(pos.length).fill(shade)
+      return (handItems[name] = [{
+        mesh: r.mesh({ pos: new Float32Array(pos), uv: new Float32Array(uv), col, idx: new Uint32Array(idx) }),
+        map, alphaTest: 0.5, cull: false, fog: false, model: new Float32Array(16),
+      }])
+    }
+    // A small block: one cube, textured per face like the real thing
+    const buffers = {}
+    for (let f = 0; f < 6; f++) {
+      const t = BLOCK_FACES[name][f]
+      const b = (buffers[t] ??= { pos: [], uv: [], col: [], idx: [] })
+      const v = toLinear(FACES[f].shade * light)
+      const start = b.pos.length / 3
+      for (const { p: c, uv: u } of FACE_DATA[f].corners) {
+        b.pos.push(c[0] - 0.5, c[1] - 0.5, c[2] - 0.5)
+        b.uv.push(u[0], u[1])
+        b.col.push(v, v, v)
+      }
+      b.idx.push(start, start + 1, start + 2, start, start + 2, start + 3)
+    }
+    return (handItems[name] = Object.entries(packBuffers(buffers)).map(([t, b]) => ({
+      ...itemFor(t, r.mesh(b)), fog: false, model: new Float32Array(16),
+    })))
+  }
+
+  let swingTime = 0 // counts down after an action
+  let bob = 0
+  function swing() {
+    swingTime = 0.3
+  }
+
+  function handOverlay(dt) {
+    if (player.dead) return []
+    swingTime = Math.max(0, swingTime - dt)
+    const s = Math.sin((1 - swingTime / 0.3) * Math.PI) * (swingTime > 0 ? 1 : 0) // 0 → 1 → 0
+    const walking = player.onGround && Math.hypot(player.vx, player.vz) > 0.5
+    bob += dt * (walking ? 10 : 0)
+    const bx = Math.sin(bob) * 0.025, by = -Math.abs(Math.cos(bob)) * 0.03
+    const name = HOTBAR[selected]
+    const items = handItemsFor(name)
+    // On touch screens the controls cover the bottom-right corner, so hold things a little higher
+    const lift = input.autoJump ? 0.14 : 0
+    const model = isTool(name)
+      ? chain(
+          // Handle bottom-right, blade angled up and in toward the middle; swings down on a hit
+          translate(0.46 + bx - s * 0.18, -0.4 + lift + by + s * 0.05, -0.9 - s * 0.12),
+          rotateY(2.15), rotateZ(-0.05 - s * 0.8), rotateX(s * 0.35), scale(0.55),
+        )
+      : chain(
+          translate(0.52 + bx - s * 0.2, -0.46 + lift + by + s * 0.06, -0.95 - s * 0.1),
+          rotateX(0.25 - s * 0.6), rotateY(0.78), scale(0.36),
+        )
+    for (const item of items) item.model.set(model)
+    return items
   }
 
   // ---------- Day / night ----------
@@ -364,6 +528,7 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     r.updateMesh(sun.mesh, billboard(eye, dir, 150, 16))
     r.updateMesh(moon.mesh, billboard(eye, dir.map((v) => -v), 150, 12))
     sun.tint = elevation < 0.15 ? hexColor('#ffb062', true) : hexColor('#fff6c8', true)
+    return { day, night }
   }
 
   // ---------- Loop ----------
@@ -382,15 +547,17 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     resize()
     const dt = Math.min((now - last) / 1000, 0.05)
     last = now
-    step(dt)
-    mobs.update(dt)
+    if (!player.dead) step(dt)
+    heal(dt)
+    attackCooldown = Math.max(0, attackCooldown - dt)
     dayTime = (dayTime + dt / DAY_SECONDS) % 1
 
     const eye = [player.x, player.y + EYE, player.z]
     camera.position = eye
     camera.yaw = player.yaw
     camera.pitch = player.pitch
-    updateSky(eye)
+    const daylight = updateSky(eye) // { day, night } levels, 0–1
+    mobs.update(dt, { player, playerAlive: !player.dead, ...daylight })
 
     drift = (drift + dt * 0.8) % CLOUD_SPAN
     clouds[0].offset[0] = drift
@@ -401,11 +568,11 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     }
 
     const t = raycast()
-    const hadTarget = !!target
     target = t?.hit ?? null
     if (target) outline.offset = target
-    if (hadTarget !== !!target) itemsDirty = true
     if (itemsDirty) collectItems()
+    view.items = [...before, ...mobs.items(), ...after, ...(target ? [outline] : [])]
+    view.overlay = handOverlay(dt)
 
     onUnderwater?.(isWater(cell(eye[0]), cell(eye[1]), cell(eye[2])))
     r.render(view, camera)
@@ -422,9 +589,10 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
       selected = ((i % HOTBAR.length) + HOTBAR.length) % HOTBAR.length
       return selected
     },
-    breakBlock,
+    primary,
     placeBlock,
-    hotbarIcons: () => HOTBAR.map((n) => sources[BLOCK_FACES[n][0]]().toDataURL()),
+    respawn,
+    hotbarIcons: () => HOTBAR.map((n) => (isTool(n) ? sources[n]() : sources[BLOCK_FACES[n][0]]()).toDataURL()),
     dispose() {
       cancelAnimationFrame(raf)
       r.dispose()

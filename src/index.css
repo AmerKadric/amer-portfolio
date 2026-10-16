@@ -489,7 +489,7 @@ div.entry:not([role]) { cursor: default; }
 .game-slot img { width: 100%; height: 100%; image-rendering: pixelated; }
 .game-slot.selected { border-color: #fff; box-shadow: 0 0 0 2px #000; position: relative; z-index: 1; }
 .game-label {
-  position: absolute; left: 50%; bottom: 66px; transform: translateX(-50%); pointer-events: none;
+  position: absolute; left: 50%; bottom: 86px; transform: translateX(-50%); pointer-events: none;
   font-size: 16px; color: #fff; text-shadow: 2px 2px 0 #3f3f3f;
 }
 .game-overlay {
@@ -505,13 +505,33 @@ div.entry:not([role]) { cursor: default; }
 /* controls sit above the drag-to-look area so taps reach them */
 .game-hotbar, .game-stick, .game-buttons, .game-pause { z-index: 2; }
 .game-stick {
-  position: absolute; left: 22px; bottom: 76px; width: 120px; height: 120px; border-radius: 50%;
+  position: absolute; left: 22px; bottom: 100px; width: 120px; height: 120px; border-radius: 50%;
   background: rgba(0, 0, 0, 0.3); border: 2px solid rgba(255, 255, 255, 0.35); display: grid; place-items: center;
 }
 .game-knob { width: 52px; height: 52px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); border: 2px solid rgba(0, 0, 0, 0.4); pointer-events: none; }
-.game-buttons { position: absolute; right: 16px; bottom: 76px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 190px; }
+.game-buttons { position: absolute; right: 16px; bottom: 100px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 190px; }
 .game-btn { height: 52px; font-size: 15px; opacity: 0.85; touch-action: none; }
 .game-btn.jump { grid-column: 1 / -1; }
 .game-pause { position: absolute; top: 12px; right: 12px; width: 44px; padding: 0; }
 .game.touch .game-slot { width: 36px; height: 36px; padding: 4px; }
-.game.touch .game-label { bottom: 56px; }
+.game.touch .game-label { bottom: 70px; }
+
+/* Health, damage and death */
+.game-hearts {
+  position: absolute; left: 50%; bottom: 66px; transform: translateX(-50%); margin-left: -88px;
+  display: flex; gap: 1px; pointer-events: none;
+}
+.game.touch .game-hearts { bottom: 54px; margin-left: -70px; }
+.heart { width: 16px; height: 14px; }
+.game.touch .heart { width: 13px; height: 11px; }
+.game-hearts.low .heart { animation: heart-shake 0.25s steps(2) infinite; }
+.game-hearts.low .heart:nth-child(even) { animation-delay: 0.12s; }
+@keyframes heart-shake { 50% { transform: translateY(-2px); } }
+.game-hurt {
+  position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(200, 0, 0, 0) 40%, rgba(200, 0, 0, 0.55));
+  animation: hurt-flash 0.45s ease-out forwards;
+}
+@keyframes hurt-flash { from { opacity: 1; } to { opacity: 0; } }
+.game-dead { background: rgba(120, 0, 0, 0.55); z-index: 70; }
+.game-dead h1 { font-size: 32px; }

@@ -56,3 +56,41 @@ export function playChime() {
     })
   } catch {}
 }
+
+// Short burst of filtered noise plus a falling tone (shared by the game's hit sounds)
+function thud({ freq, endFreq, noiseFreq, gain, length }) {
+  if (!getSettings().sound) return
+  try {
+    ctx ??= new (window.AudioContext || window.webkitAudioContext)()
+    const t = ctx.currentTime
+    const noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * length), ctx.sampleRate)
+    const data = noise.getChannelData(0)
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length) ** 2
+    const src = ctx.createBufferSource()
+    src.buffer = noise
+    const band = ctx.createBiquadFilter()
+    band.type = 'lowpass'
+    band.frequency.value = noiseFreq
+    const ng = ctx.createGain()
+    ng.gain.value = gain
+    src.connect(band).connect(ng).connect(ctx.destination)
+    src.start(t)
+
+    const osc = ctx.createOscillator()
+    const og = ctx.createGain()
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(freq, t)
+    osc.frequency.exponentialRampToValueAtTime(endFreq, t + length)
+    og.gain.setValueAtTime(gain * 0.6, t)
+    og.gain.exponentialRampToValueAtTime(0.0001, t + length)
+    osc.connect(og).connect(ctx.destination)
+    osc.start(t)
+    osc.stop(t + length + 0.02)
+  } catch {}
+}
+
+// The player getting hurt: a low "oof"
+export const playHurt = () => thud({ freq: 220, endFreq: 90, noiseFreq: 700, gain: 0.35, length: 0.22 })
+
+// Hitting a creature: a quick, punchy smack
+export const playHit = () => thud({ freq: 420, endFreq: 160, noiseFreq: 2200, gain: 0.25, length: 0.12 })

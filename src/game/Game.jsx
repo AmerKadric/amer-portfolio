@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createGame, HOTBAR } from './engine'
+import { createGame, HOTBAR, MAX_HEALTH } from './engine'
 import { playClick } from '../lib/sound'
 
 // The hidden game's screen: canvas, crosshair, hotbar, pause menu, and either
@@ -21,7 +21,29 @@ const codeOf = (e) => {
   return { ' ': 'Space', Shift: 'ShiftLeft', Control: 'ControlLeft' }[k] ?? k
 }
 
-const LABELS = { grass: 'Grass', dirt: 'Dirt', stone: 'Stone', cobble: 'Cobblestone', planks: 'Planks', log: 'Log', glass: 'Glass', sand: 'Sand', bricks: 'Bricks' }
+const LABELS = {
+  ironSword: 'Iron Sword', grass: 'Grass', dirt: 'Dirt', stone: 'Stone', cobble: 'Cobblestone',
+  planks: 'Planks', log: 'Log', glass: 'Glass', bricks: 'Bricks',
+}
+
+// Pixel-art heart: # outline, r red, w shine, e empty (dark) inside
+const HEART = ['.##.##.', '#wr#rr#', '#rrrrr#', '.#rrr#.', '..#r#..', '...#...']
+const HEART_COLORS = { '#': '#1a0505', r: '#e0262b', w: '#ffb3b3', e: '#3b1212' }
+function Heart({ fill }) {
+  // fill: 2 full, 1 half (left side red), 0 empty
+  return (
+    <svg className="heart" viewBox="0 0 7 6" shapeRendering="crispEdges" aria-hidden="true">
+      {HEART.flatMap((row, y) =>
+        [...row].map((c, x) => {
+          if (c === '.') return null
+          let key = c
+          if (c !== '#' && (fill === 0 || (fill === 1 && x > 3))) key = 'e'
+          return <rect key={`${x},${y}`} x={x} y={y} width="1" height="1" fill={HEART_COLORS[key]} />
+        }),
+      )}
+    </svg>
+  )
+}
 
 export default function Game({ scene, onExit }) {
   const canvasRef = useRef(null)
@@ -33,6 +55,9 @@ export default function Game({ scene, onExit }) {
   const [icons, setIcons] = useState([])
   const [underwater, setUnderwater] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [health, setHealth] = useState(MAX_HEALTH)
+  const [hurtFlash, setHurtFlash] = useState(0) // bumps on every hit to replay the red flash
+  const [dead, setDead] = useState(false)
 
   // Start the game (after a frame, so the loading screen shows first)
   useEffect(() => {
@@ -42,6 +67,12 @@ export default function Game({ scene, onExit }) {
       game = createGame(canvasRef.current, { biomeId: scene.biome, time: scene.time }, {
         onUnderwater: (w) => {
           if (w !== wet) setUnderwater((wet = w))
+        },
+        onHealth: setHealth,
+        onHurt: () => setHurtFlash((n) => n + 1),
+        onDeath: () => {
+          setDead(true)
+          if (document.pointerLockElement) document.exitPointerLock()
         },
       })
       if (!game) {
@@ -119,7 +150,7 @@ export default function Game({ scene, onExit }) {
     }
     const onMouseDown = (e) => {
       if (!active() || e.target !== canvas) return
-      if (e.button === 0) breakTimer = repeat(() => gameRef.current?.breakBlock())
+      if (e.button === 0) breakTimer = repeat(() => gameRef.current?.primary())
       if (e.button === 2) placeTimer = repeat(() => gameRef.current?.placeBlock())
     }
     const onMouseUp = (e) => {
@@ -177,6 +208,13 @@ export default function Game({ scene, onExit }) {
     } catch {
       fallback()
     }
+  }
+  const respawn = () => {
+    playClick()
+    gameRef.current?.respawn()
+    setDead(false)
+    setHealth(MAX_HEALTH)
+    resume()
   }
   const exit = () => {
     playClick()
@@ -281,7 +319,21 @@ export default function Game({ scene, onExit }) {
             ))}
           </div>
           <div className="game-label">{LABELS[HOTBAR[selected]]}</div>
+          <div className={`game-hearts${health <= 4 && !dead ? ' low' : ''}`} aria-label={`Health: ${health / 2} of 10 hearts`}>
+            {Array.from({ length: MAX_HEALTH / 2 }, (_, i) => (
+              <Heart key={i} fill={Math.max(0, Math.min(2, health - i * 2))} />
+            ))}
+          </div>
+          {hurtFlash > 0 && <div key={hurtFlash} className="game-hurt" />}
         </>
+      )}
+
+      {dead && (
+        <div className="game-overlay game-dead">
+          <h1>You died!</h1>
+          <button type="button" className="mc-btn" onClick={respawn}>Respawn</button>
+          <button type="button" className="mc-btn" onClick={exit}>Back to Portfolio</button>
+        </div>
       )}
 
       {touch && !loading && !failed && !paused && (
@@ -291,7 +343,7 @@ export default function Game({ scene, onExit }) {
             <div className="game-knob" style={{ transform: `translate(${knob[0]}px, ${knob[1]}px)` }} />
           </div>
           <div className="game-buttons">
-            <button type="button" className="mc-btn game-btn" {...tapRepeat('breakBlock')} aria-label="Break block">Break</button>
+            <button type="button" className="mc-btn game-btn" {...tapRepeat('primary')} aria-label="Break block or attack">Hit</button>
             <button type="button" className="mc-btn game-btn" {...tapRepeat('placeBlock')} aria-label="Place block">Place</button>
             <button type="button" className="mc-btn game-btn jump" {...hold('jump')} aria-label="Jump">Jump</button>
           </div>
@@ -306,7 +358,7 @@ export default function Game({ scene, onExit }) {
         </div>
       )}
 
-      {!loading && !failed && paused && (
+      {!loading && !failed && paused && !dead && (
         <div className="game-overlay">
           <h1>Game Menu</h1>
           <button type="button" className="mc-btn" onClick={resume}>{touch ? 'Back to Game' : 'Click to Play'}</button>
@@ -316,13 +368,15 @@ export default function Game({ scene, onExit }) {
               <>
                 <li>Left stick: walk (push far to sprint)</li>
                 <li>Drag the right side: look around</li>
-                <li>Break / Place / Jump buttons</li>
+                <li>Hit (attack or break) / Place / Jump buttons</li>
+                <li>Zombies come out at night: keep your sword ready</li>
                 <li>Tap the hotbar to choose a block</li>
               </>
             ) : (
               <>
                 <li>Mouse: look · WASD: move · Space: jump · Shift: sprint</li>
-                <li>Left click: break · Right click: place</li>
+                <li>Left click: attack / break · Right click: place</li>
+                <li>Zombies come out at night: keep your sword ready (slot 1)</li>
                 <li>1–9 or scroll: choose a block · Esc: pause</li>
               </>
             )}

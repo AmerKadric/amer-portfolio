@@ -313,6 +313,34 @@ export function worldTextures(p) {
       })
     },
 
+    // Zombie
+    zombieSkin: () => paint(90, (x, y, r) => pick(ramp([82, 128, 66], [0.84, 0.94, 1.04]), r())),
+    zombieHair: () => paint(91, (x, y, r) => pick(ramp([52, 88, 44], [0.86, 0.96, 1.04]), r())),
+    zombieFace: () =>
+      paint(92, (x, y, r) => {
+        if (y >= 7 && y <= 8 && (x === 3 || x === 4 || x === 11 || x === 12)) return [24, 30, 22] // eyes
+        if (y === 11 && x >= 6 && x <= 9) return [50, 74, 40] // mouth
+        if (y < 3) return pick(ramp([52, 88, 44], [0.86, 1]), r()) // hairline
+        return pick(ramp([82, 128, 66], [0.84, 0.94, 1.04]), r())
+      }),
+    zombieShirt: () => paint(93, (x, y, r) => pick(ramp([40, 156, 160], [0.82, 0.92, 1.02]), r())),
+    zombiePants: () => paint(94, (x, y, r) => pick(ramp([70, 60, 150], [0.82, 0.92, 1.02]), r())),
+
+    // Iron sword: blade along the diagonal, guard across it, handle bottom-left
+    ironSword: () =>
+      paint(95, (x, y) => {
+        const d = x + y, c = x - y
+        if (x === 0 && y === 15) return [64, 64, 74] // pommel
+        if (d === 15 && x >= 1 && x <= 3) return [112, 80, 48] // handle
+        if (c === -7 && x >= 2 && x <= 6) return [72, 72, 82] // guard
+        if (x >= 5 && x <= 14 && d >= 14 && d <= 16) {
+          if (x === 14 && d !== 15) return null // pointed tip
+          return d === 14 ? [236, 236, 240] : d === 15 ? [196, 196, 206] : [128, 128, 140]
+        }
+        if (x >= 5 && x <= 13 && (d === 13 || d === 17)) return [60, 60, 70] // outline
+        return null
+      }),
+
     // Simple animal skins
     pigSkin: () => paint(64, (x, y, r) => pick(ramp([236, 160, 160], [0.94, 1, 1.03]), r())),
     pigFace: () =>
