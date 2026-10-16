@@ -491,8 +491,8 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater, onHealth, 
     const model = isTool(name)
       ? chain(
           // Handle bottom-right, blade angled up and in toward the middle; swings down on a hit
-          translate(0.46 + bx - s * 0.18, -0.4 + lift + by + s * 0.05, -0.9 - s * 0.12),
-          rotateY(2.15), rotateZ(-0.05 - s * 0.8), rotateX(s * 0.35), scale(0.55),
+          translate(0.46 + bx - s * 0.18, -0.36 + lift + by + s * 0.05, -0.9 - s * 0.12),
+          rotateY(2.15), rotateZ(-0.05 - s * 0.8), rotateX(s * 0.35), scale(0.5),
         )
       : chain(
           translate(0.52 + bx - s * 0.2, -0.46 + lift + by + s * 0.06, -0.95 - s * 0.1),

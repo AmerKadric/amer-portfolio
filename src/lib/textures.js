@@ -63,7 +63,7 @@ const ICE = ramp([146, 182, 238], [0.9, 0.97, 1.05, 1.14])
 // Dirt: mostly mid-brown with scattered darker and lighter specks
 const dirtPixel = (r) => {
   const t = r()
-  return DIRT[t < 0.14 ? 0 : t < 0.42 ? 1 : t < 0.9 ? 2 : 3]
+  return t < 0.12 ? DIRT[0] : t < 0.4 ? DIRT[1] : t < 0.93 ? DIRT[2] : t < 0.98 ? DIRT[3] : [150, 140, 130]
 }
 
 // Stone with a few small clusters of ore pixels
@@ -81,18 +81,30 @@ function oreTexture(seed, [dark, light]) {
 // Cobblestone: irregular stones with dark mortar lines, optionally mossy
 function cobbleTexture(seed, stones, moss) {
   const r0 = rng(seed)
-  const seeds = Array.from({ length: 9 }, () => [r0() * 16, r0() * 16])
-  return paint(seed, (x, y, r) => {
-    // distance to nearest and second-nearest stone centre (wrapping), mortar where they're close
-    let d1 = 99, d2 = 99
-    for (const [sx, sy] of seeds) {
+  const seeds = Array.from({ length: 10 }, () => [r0() * 16, r0() * 16, 0.45 + r0() * 0.4])
+  const wrap = (v) => (v + SIZE) % SIZE
+  // nearest stone for each pixel, or -1 for the dark gaps between stones
+  const cell = (x, y) => {
+    let d1 = 99, d2 = 99, id = 0
+    seeds.forEach(([sx, sy], i) => {
       const dx = Math.min(Math.abs(x - sx), 16 - Math.abs(x - sx)), dy = Math.min(Math.abs(y - sy), 16 - Math.abs(y - sy))
       const d = Math.hypot(dx, dy)
-      if (d < d1) { d2 = d1; d1 = d } else if (d < d2) d2 = d
-    }
-    if (d2 - d1 < 0.9) return STONE[0]
+      if (d < d1) { d2 = d1; d1 = d; id = i } else if (d < d2) d2 = d
+    })
+    return d2 - d1 < 0.75 ? -1 : id
+  }
+  const ids = Array.from({ length: SIZE * SIZE }, (_, i) => cell(i % SIZE, Math.floor(i / SIZE)))
+  const at = (x, y) => ids[wrap(y) * SIZE + wrap(x)]
+  const GAP = [74, 74, 74]
+  return paint(seed, (x, y, r) => {
+    const id = at(x, y)
+    if (id < 0) return GAP
     if (moss && r() < 0.35) return pick(moss, r())
-    return pick(stones, 0.35 + r() * 0.65)
+    const lit = at(x - 1, y) < 0 || at(x, y - 1) < 0
+    const shaded = at(x + 1, y) < 0 || at(x, y + 1) < 0
+    if (lit && !shaded) return stones[4]
+    if (shaded) return stones[1]
+    return pick(stones, seeds[id][2] + (r() - 0.5) * 0.3)
   })
 }
 
@@ -119,8 +131,15 @@ export function worldTextures(p) {
 
   return {
     stone: () => {
-      const blot = tileNoise(41, 4)
-      return paint(11, (x, y, r) => pick(STONE, blot(x, y) * 0.65 + r() * 0.35))
+      const marks = new Map()
+      const r0 = rng(111)
+      for (let i = 0; i < 22; i++) {
+        const x = Math.floor(r0() * SIZE), y = Math.floor(r0() * SIZE), len = 1 + Math.floor(r0() * 4)
+        const tone = i < 15 ? STONE[i % 2] : STONE[4]
+        for (let k = 0; k < len; k++) marks.set(`${(x + k) % SIZE},${y}`, tone)
+        if (i < 15 && r0() < 0.4) marks.set(`${(x + 1) % SIZE},${(y + 1) % SIZE}`, tone)
+      }
+      return paint(11, (x, y, r) => marks.get(`${x},${y}`) || STONE[r() < 0.7 ? 2 : 3])
     },
     dirt: () => paint(12, (x, y, r) => dirtPixel(r)),
     grassTop: () => {
@@ -129,7 +148,11 @@ export function worldTextures(p) {
     },
     grassSide: () => {
       const len = drips(14, 2)
-      return paint(14, (x, y, r) => (y < len[x] ? pick(GRASS, 0.2 + r() * 0.8) : dirtPixel(r)))
+      return paint(14, (x, y, r) => {
+        if (y < len[x]) return pick(GRASS, 0.2 + r() * 0.8)
+        if (y === len[x] && r() < 0.35) return GRASS[0] // ragged edge
+        return dirtPixel(r)
+      })
     },
     snow: () => paint(22, (x, y, r) => pick(SNOW, r() * 0.6 + 0.4 * ((x * 3 + y * 5) % 7) / 7)),
     snowSide: () => {
@@ -144,8 +167,14 @@ export function worldTextures(p) {
         return pick(SANDSTONE, 0.25 + r() * 0.6)
       }),
     logSide: () => {
-      const col = Array.from({ length: SIZE }, rng(16))
-      return paint(16, (x, y, r) => pick(BARK, col[x] * 0.65 + r() * 0.35))
+      const r0 = rng(16)
+      const groove = Array.from({ length: SIZE }, () => r0() < 0.4) // darker grooves run down these columns
+      const breaks = new Set()
+      for (let i = 0; i < 14; i++) breaks.add(`${Math.floor(r0() * SIZE)},${Math.floor(r0() * SIZE)}`)
+      return paint(16, (x, y, r) => {
+        if (groove[x] && !breaks.has(`${x},${y}`)) return BARK[r() < 0.75 ? 0 : 1]
+        return pick(BARK, 0.4 + r() * 0.6)
+      })
     },
     logTop: () => paint(17, ringsPixel(BARK, RING)),
     leaves: () => paint(18, leafPixel(LEAVES)),
@@ -289,27 +318,44 @@ export function worldTextures(p) {
 
     // Building blocks for the hidden game
     planks: () => {
-      const wood = ramp([168, 132, 80], [0.72, 0.86, 0.95, 1.04])
+      // Oak planks: four boards, each with a dark seam below, staggered ends and faint grain
+      const wood = ramp([162, 130, 78], [0.66, 0.82, 0.92, 1, 1.07])
+      const ends = [3, 11, 6, 13]
+      const r0 = rng(80)
+      const grain = new Set()
+      for (let i = 0; i < 12; i++) {
+        const x = Math.floor(r0() * SIZE), y = Math.floor(r0() * SIZE), len = 2 + Math.floor(r0() * 4)
+        for (let k = 0; k < len; k++) grain.add(`${(x + k) % SIZE},${y}`)
+      }
       return paint(80, (x, y, r) => {
-        if (y % 4 === 3) return wood[0] // board seams
-        if ((y % 8 < 4 ? x === 3 : x === 11) && r() < 0.9) return wood[0] // staggered board ends
-        return pick(wood, 0.3 + r() * 0.7)
+        const board = Math.floor(y / 4), row = y % 4
+        if (row === 3) return wood[0] // seam
+        if (x === ends[board]) return wood[1] // board end
+        if (row === 0 && x !== (ends[board] + 1) % SIZE) return wood[4] // lit top edge
+        if (grain.has(`${x},${y}`)) return wood[2]
+        return wood[r() < 0.8 ? 3 : 2]
       })
     },
     glass: () =>
       paint(81, (x, y) => {
+        // Pale frame with a few diagonal glints in two corners, see-through elsewhere
         const edge = x === 0 || y === 0 || x === 15 || y === 15
-        if (edge) return [196, 222, 230]
-        if ((x - y === 3 || x - y === 4) && x > 4 && x < 13) return [236, 246, 250] // glint
-        return null // see-through
+        if (edge) return (x + y) % 15 === 0 && x !== y ? [168, 196, 206] : [218, 236, 242]
+        const d = x + y
+        if ((d === 5 && x >= 1 && x <= 4) || (d === 7 && x >= 2 && x <= 4) || (d === 4 && x === 3)) return [236, 246, 250]
+        if ((d === 22 && x >= 11 && x <= 13) || (d === 24 && x >= 11 && x <= 13)) return [236, 246, 250]
+        return null
       }),
     bricks: () => {
-      const brick = ramp([150, 74, 58], [0.8, 0.92, 1, 1.08])
+      // Red bricks in a running bond with light mortar; each brick has a lit top and a darker base
+      const r0 = rng(82)
+      const tone = Array.from({ length: 16 }, () => 0.9 + r0() * 0.18)
       return paint(82, (x, y, r) => {
-        const row = Math.floor(y / 4)
-        const mortarH = y % 4 === 3
-        const mortarV = (x + (row % 2) * 4) % 8 === 7
-        return mortarH || mortarV ? [176, 168, 156] : pick(brick, r())
+        const row = Math.floor(y / 4), sx = x + (row % 2) * 4
+        const inRow = y % 4
+        if (inRow === 3 || sx % 8 === 7) return [168, 160, 152] // mortar
+        const t = tone[row * 2 + Math.floor((sx % 16) / 8)] * (inRow === 0 ? 1.12 : inRow === 2 ? 0.86 : 1)
+        return shade([150, 74, 58], t * (0.96 + r() * 0.08))
       })
     },
 
@@ -326,20 +372,33 @@ export function worldTextures(p) {
     zombieShirt: () => paint(93, (x, y, r) => pick(ramp([40, 156, 160], [0.82, 0.92, 1.02]), r())),
     zombiePants: () => paint(94, (x, y, r) => pick(ramp([70, 60, 150], [0.82, 0.92, 1.02]), r())),
 
-    // Iron sword: blade along the diagonal, guard across it, handle bottom-left
-    ironSword: () =>
-      paint(95, (x, y) => {
-        const d = x + y, c = x - y
-        if (x === 0 && y === 15) return [64, 64, 74] // pommel
-        if (d === 15 && x >= 1 && x <= 3) return [112, 80, 48] // handle
-        if (c === -7 && x >= 2 && x <= 6) return [72, 72, 82] // guard
-        if (x >= 5 && x <= 14 && d >= 14 && d <= 16) {
-          if (x === 14 && d !== 15) return null // pointed tip
-          return d === 14 ? [236, 236, 240] : d === 15 ? [196, 196, 206] : [128, 128, 140]
-        }
-        if (x >= 5 && x <= 13 && (d === 13 || d === 17)) return [60, 60, 70] // outline
-        return null
-      }),
+    // Iron sword, pixel for pixel like the in-game item
+    ironSword: () => {
+      const rows = [
+        '.............OOO',
+        '............OWLO',
+        '...........OWLWO',
+        '..........OWLWO.',
+        '.........OWLWO..',
+        '........OWLWO...',
+        '..KK...OWLWO....',
+        '..KgK.OWLWO.....',
+        '...KGKWLWO......',
+        '...KGKLWO.......',
+        '....KGKKK.......',
+        '...hbKGgK.......',
+        '..hlX.KKgK......',
+        'KKbX....KK......',
+        'KGK.............',
+        'KKK.............',
+      ]
+      const colors = {
+        O: [55, 55, 55], W: [255, 255, 255], L: [216, 216, 216], // blade
+        K: [30, 30, 30], G: [138, 138, 138], g: [90, 90, 90], // guard and pommel
+        h: [62, 44, 18], b: [92, 67, 28], l: [122, 90, 38], X: [36, 24, 10], // handle
+      }
+      return paint(95, (x, y) => colors[rows[y][x]] || null)
+    },
 
     // Simple animal skins
     pigSkin: () => paint(64, (x, y, r) => pick(ramp([236, 160, 160], [0.94, 1, 1.03]), r())),
