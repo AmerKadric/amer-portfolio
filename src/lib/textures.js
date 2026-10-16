@@ -287,6 +287,32 @@ export function worldTextures(p) {
         return null
       }),
 
+    // Building blocks for the hidden game
+    planks: () => {
+      const wood = ramp([168, 132, 80], [0.72, 0.86, 0.95, 1.04])
+      return paint(80, (x, y, r) => {
+        if (y % 4 === 3) return wood[0] // board seams
+        if ((y % 8 < 4 ? x === 3 : x === 11) && r() < 0.9) return wood[0] // staggered board ends
+        return pick(wood, 0.3 + r() * 0.7)
+      })
+    },
+    glass: () =>
+      paint(81, (x, y) => {
+        const edge = x === 0 || y === 0 || x === 15 || y === 15
+        if (edge) return [196, 222, 230]
+        if ((x - y === 3 || x - y === 4) && x > 4 && x < 13) return [236, 246, 250] // glint
+        return null // see-through
+      }),
+    bricks: () => {
+      const brick = ramp([150, 74, 58], [0.8, 0.92, 1, 1.08])
+      return paint(82, (x, y, r) => {
+        const row = Math.floor(y / 4)
+        const mortarH = y % 4 === 3
+        const mortarV = (x + (row % 2) * 4) % 8 === 7
+        return mortarH || mortarV ? [176, 168, 156] : pick(brick, r())
+      })
+    },
+
     // Simple animal skins
     pigSkin: () => paint(64, (x, y, r) => pick(ramp([236, 160, 160], [0.94, 1, 1.03]), r())),
     pigFace: () =>

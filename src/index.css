@@ -467,3 +467,51 @@ div.entry:not([role]) { cursor: default; }
   20%, 60% { transform: translateX(-8px); }
   40%, 80% { transform: translateX(8px); }
 }
+
+/* ---------- Hidden game ---------- */
+.logo-img { cursor: default; user-select: none; -webkit-user-drag: none; }
+.game { position: fixed; inset: 0; z-index: 50; background: #000; touch-action: none; user-select: none; }
+.game-canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.game-underwater { position: absolute; inset: 0; background: rgba(30, 70, 190, 0.38); pointer-events: none; }
+.game-crosshair {
+  position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; pointer-events: none;
+  background: linear-gradient(#fff, #fff) center / 2px 18px no-repeat, linear-gradient(#fff, #fff) center / 18px 2px no-repeat;
+  mix-blend-mode: difference;
+}
+.game-hotbar {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  display: flex; padding: 3px; background: rgba(0, 0, 0, 0.55); border: 2px solid #000; box-shadow: inset 0 0 0 2px #5b5b5b;
+}
+.game-slot {
+  width: 44px; height: 44px; padding: 6px; margin: 0; display: grid; place-items: center; cursor: pointer;
+  background: rgba(139, 139, 139, 0.35); border: 2px solid #373737;
+}
+.game-slot img { width: 100%; height: 100%; image-rendering: pixelated; }
+.game-slot.selected { border-color: #fff; box-shadow: 0 0 0 2px #000; position: relative; z-index: 1; }
+.game-label {
+  position: absolute; left: 50%; bottom: 66px; transform: translateX(-50%); pointer-events: none;
+  font-size: 16px; color: #fff; text-shadow: 2px 2px 0 #3f3f3f;
+}
+.game-overlay {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  padding: 16px; background: rgba(0, 0, 0, 0.6);
+}
+.game-overlay h1 { margin: 0 0 10px; font-size: 24px; text-shadow: 2px 2px 0 var(--shadow); }
+.game-overlay .mc-btn { width: min(360px, 100%); }
+.game-help { margin: 14px 0 0; padding: 0; list-style: none; text-align: center; font-size: 14px; color: #ddd; line-height: 1.7; text-shadow: 2px 2px 0 #222; }
+
+/* Touch controls */
+.game-look { position: absolute; top: 0; right: 0; bottom: 0; width: 60%; }
+/* controls sit above the drag-to-look area so taps reach them */
+.game-hotbar, .game-stick, .game-buttons, .game-pause { z-index: 2; }
+.game-stick {
+  position: absolute; left: 22px; bottom: 76px; width: 120px; height: 120px; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.3); border: 2px solid rgba(255, 255, 255, 0.35); display: grid; place-items: center;
+}
+.game-knob { width: 52px; height: 52px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); border: 2px solid rgba(0, 0, 0, 0.4); pointer-events: none; }
+.game-buttons { position: absolute; right: 16px; bottom: 76px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 190px; }
+.game-btn { height: 52px; font-size: 15px; opacity: 0.85; touch-action: none; }
+.game-btn.jump { grid-column: 1 / -1; }
+.game-pause { position: absolute; top: 12px; right: 12px; width: 44px; padding: 0; }
+.game.touch .game-slot { width: 36px; height: 36px; padding: 4px; }
+.game.touch .game-label { bottom: 56px; }

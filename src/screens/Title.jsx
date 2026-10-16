@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Github, Linkedin } from 'lucide-react'
 import { profile, splashes } from '../data'
 import { useSettings } from '../lib/settings'
 import { playClick } from '../lib/sound'
-import { rerollSplash } from '../lib/advancements'
+import { rerollSplash, unlock } from '../lib/advancements'
+import { go } from '../lib/router'
 
 const pick = (prev) => {
   let next
@@ -15,12 +16,24 @@ const pick = (prev) => {
 export default function Title() {
   const { splash } = useSettings()
   const [text, setText] = useState(() => pick())
+  // Secret: five quick clicks on the logo drop you into the world
+  const logoClicks = useRef([])
+  const onLogoClick = () => {
+    const now = Date.now()
+    logoClicks.current = [...logoClicks.current.filter((t) => now - t < 2000), now]
+    if (logoClicks.current.length >= 5) {
+      logoClicks.current = []
+      playClick()
+      unlock('secret')
+      go('play')
+    }
+  }
 
   return (
     <main className="title-screen">
       <h1 className="sr-only">{profile.name} — Portfolio</h1>
       <div className="logo" aria-hidden="true">
-        <img className="logo-img" src="/logo.webp" alt="" width="1600" height="527" fetchpriority="high" />
+        <img className="logo-img" src="/logo.webp" alt="" width="1600" height="527" fetchpriority="high" onClick={onLogoClick} draggable="false" />
         {splash && (
           <button
             type="button"

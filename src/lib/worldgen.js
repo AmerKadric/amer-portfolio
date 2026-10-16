@@ -33,7 +33,7 @@ function hash3(x, y, z) {
 // Texture per face, in order +x, -x, +y, -y, +z, -z
 const all = (t) => [t, t, t, t, t, t]
 const sides = (side, top, bottom = top) => [side, side, top, bottom, side, side]
-const BLOCK_FACES = {
+export const BLOCK_FACES = {
   grass: sides('grassSide', 'grassTop', 'dirt'),
   snowGrass: sides('snowSide', 'snow', 'dirt'),
   dirt: all('dirt'),
@@ -58,19 +58,23 @@ const BLOCK_FACES = {
   birchLeaves: all('birchLeaves'),
   snowLeaves: sides('leaves', 'snowLeaves', 'leaves'),
   cactus: sides('cactusSide', 'cactusTop'),
+  // placeable in the game
+  planks: all('planks'),
+  glass: all('glass'),
+  bricks: all('bricks'),
 }
-const INSET = { cactus: 1 / 16 } // cactus sides sit one pixel in from the block edge
+export const INSET = { cactus: 1 / 16 } // cactus sides sit one pixel in from the block edge
 // Blocks you can see past, so they don't hide the faces next to them
-const SEE_THROUGH = new Set(['cactus', 'leaves', 'birchLeaves', 'snowLeaves'])
+export const SEE_THROUGH = new Set(['cactus', 'leaves', 'birchLeaves', 'snowLeaves', 'glass'])
 // Flat sprites drawn as two crossed planes (or lying flat, for lily pads)
 export const PLANTS = new Set([
   'tallGrass', 'fern', 'poppy', 'dandelion', 'deadBush', 'redMushroom', 'brownMushroom', 'berryBush', 'sugarCane', 'lilyPad',
   'oxeyeDaisy', 'pinkTulip',
 ])
 // Textures with holes in them (drawn with an alpha cutout)
-export const CUTOUT = new Set(['leaves', 'birchLeaves', ...PLANTS])
+export const CUTOUT = new Set(['leaves', 'birchLeaves', 'glass', ...PLANTS])
 
-const FACES = [
+export const FACES = [
   { n: [1, 0, 0], u: 2, v: 1, shade: 0.6 },
   { n: [-1, 0, 0], u: 2, v: 1, shade: 0.6 },
   { n: [0, 1, 0], u: 0, v: 2, shade: 1 },
@@ -78,11 +82,11 @@ const FACES = [
   { n: [0, 0, 1], u: 0, v: 1, shade: 0.8 },
   { n: [0, 0, -1], u: 0, v: 1, shade: 0.8 },
 ]
-const AO = [0.5, 0.66, 0.82, 1] // corner brightness by number of open neighbours
+export const AO = [0.5, 0.66, 0.82, 1] // corner brightness by number of open neighbours
 
 // Precomputed per face: its 4 corners (wound to face outward), each corner's
 // texture coords, and the 3 neighbouring blocks that darken that corner
-const FACE_DATA = FACES.map(({ n, u, v }) => {
+export const FACE_DATA = FACES.map(({ n, u, v }) => {
   const axis = n[0] ? 0 : n[1] ? 1 : 2
   let corners = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([i, j]) => {
     const p = [0, 0, 0]
@@ -103,7 +107,7 @@ const FACE_DATA = FACES.map(({ n, u, v }) => {
   return { axis, corners }
 })
 
-const key = (x, y, z) => ((x + 128) * 256 + (z + 128)) * 256 + y
+export const key = (x, y, z) => ((x + 128) * 256 + (z + 128)) * 256 + y
 
 // ---------- Trees ----------
 
@@ -208,7 +212,7 @@ function pickWeighted(kinds, r) {
 
 const leg = (x, z, h, tex) => ({ min: [x, 0, z], max: [x + 4, h, z + 4], faces: all(tex) })
 const head = (min, max, skin, face, top = skin) => ({ min, max, faces: [skin, skin, top, skin, face, skin] })
-const MOBS = {
+export const MOBS = {
   pig: [
     { min: [-5, 6, -8], max: [5, 14, 8], faces: all('pigSkin') },
     leg(-5, -8, 6, 'pigSkin'), leg(1, -8, 6, 'pigSkin'), leg(-5, 4, 6, 'pigSkin'), leg(1, 4, 6, 'pigSkin'),
@@ -235,7 +239,7 @@ const CLOUD_CELL = 12
 const CLOUD_GRID = 32
 export const CLOUD_SPAN = CLOUD_CELL * CLOUD_GRID
 
-function cloudGeometry(cover, seed) {
+export function cloudGeometry(cover, seed) {
   // Smooth, tiling pattern so the layer can wrap around seamlessly as it drifts
   const r = rng(seed)
   const coarse = 8
@@ -277,13 +281,15 @@ function cloudGeometry(cover, seed) {
 
 // ---------- World ----------
 
-export function generateWorld(biomeId, time) {
+// Decide everything about a biome's world: terrain, trees, features, plants and
+// animals. Shared by the background panorama (meshed below) and the hidden game
+// (which turns it into editable blocks).
+export function planWorld(biomeId) {
   const biome = BIOMES[biomeId]
   const noise = makeNoise(7)
   const ridgeNoise = makeNoise(13)
   const patchNoise = makeNoise(21)
   const { sea } = biome
-  const sunset = time === 'sunset'
   const ridge = (x, z) => Math.max(0, 1 - Math.abs(ridgeNoise(x * 0.08, z * 0.08) - 0.5) / 0.22)
   const heightAt = (x, z) => Math.round(biome.height(noise(x * 0.045 + 40, z * 0.045 + 40), ridge(x, z), x, z))
   const HALF = biome.half ?? 56
@@ -360,6 +366,127 @@ export function generateWorld(biomeId, time) {
     }
   }
 
+  // Plants: [kind, x, y, z, offsetX, offsetZ]. Lily pads float on the water's surface.
+  const plants = []
+  const pr = rng(123)
+  const { sugarCane = 0, lilyPad = 0 } = biome.water === 'ice' ? {} : biome.shore ?? {}
+  const nearWater = (x, z) => h(x + 1, z) < sea || h(x - 1, z) < sea || h(x, z + 1) < sea || h(x, z - 1) < sea
+  for (let x = -HALF; x < HALF; x++) {
+    for (let z = -HALF; z < HALF; z++) {
+      if (dist(x, z) > HALF) continue
+      const top = h(x, z)
+      if (top < sea) {
+        if (sea - top <= 3 && pr() < lilyPad) plants.push(['lilyPad', x, sea + 1, z, 0, 0])
+        continue
+      }
+      if (extra.has(key(x, top + 1, z))) continue
+      // Sugar cane grows right at the water's edge
+      if (top <= sea + 1 && nearWater(x, z) && pr() < sugarCane) {
+        const tall = 1 + Math.floor(pr() * 3)
+        for (let i = 1; i <= tall; i++) plants.push(['sugarCane', x, top + i, z, 0, 0])
+        continue
+      }
+      if (top <= sea) continue
+      for (const [kind, odds, on] of biome.plants ?? []) {
+        if (ground(x, z) !== on || pr() > odds) continue
+        plants.push([kind, x, top + 1, z, (pr() - 0.5) * 0.3, (pr() - 0.5) * 0.3])
+        break
+      }
+    }
+  }
+
+  // Animals grazing within sight of the camera, on flat grass: [type, x, top, z, turn]
+  const mobs = []
+  const { kinds: mobKinds, count = 0 } = biome.animals ?? {}
+  const ar = rng(31)
+  for (let tries = 0; tries < 400 && mobs.length < count; tries++) {
+    const angle = ar() * Math.PI * 2, d = 7 + ar() * 16
+    const x = Math.round(Math.cos(angle) * d), z = Math.round(Math.sin(angle) * d)
+    const top = h(x, z)
+    if (top <= sea + 1 || !['grass', 'snowGrass'].includes(ground(x, z))) continue
+    if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => h(x + dx, z + dz) !== top || extra.has(key(x + dx, top + 1, z + dz)))) continue
+    if (extra.has(key(x, top + 1, z)) || mobs.some(([, px, , pz]) => Math.hypot(px - x, pz - z) < 3)) continue
+    const turn = Math.floor(ar() * 4)
+    mobs.push([pickWeighted(mobKinds, ar), x, top, z, turn])
+  }
+
+  // Eye level just above the nearby ground, like a player looking out from a hill
+  let peak = sea
+  for (let x = -7; x <= 7; x++) for (let z = -7; z <= 7; z++) peak = Math.max(peak, h(x, z))
+
+  return { biome, HALF, SIZE, sea, h, ground, dist, terrainBlock, extra, plants, mobs, peak }
+}
+
+export const toLinear = (v) => Math.min(1, v) ** 2.2
+
+// Append one plant to a texture buffer: two crossed planes, or a flat pad on the water
+export function addPlant(buffer, [kind, x, y, z, ox, oz], shade) {
+  const b = buffer(kind)
+  const quad = (corners) => {
+    const start = b.pos.length / 3
+    b.pos.push(...corners)
+    b.uv.push(0, 0, 1, 0, 1, 1, 0, 1)
+    for (let i = 0; i < 4; i++) b.col.push(shade, shade, shade)
+    b.idx.push(start, start + 1, start + 2, start, start + 2, start + 3)
+  }
+  if (kind === 'lilyPad') {
+    const py = y - 0.58, s = 0.5
+    quad([x - s, py, z - s, x + s, py, z - s, x + s, py, z + s, x - s, py, z + s])
+    return
+  }
+  const s = 0.45
+  for (const [dx, dz] of [[1, 1], [1, -1]]) {
+    quad([
+      x + ox - dx * s, y - 0.5, z + oz - dz * s,
+      x + ox + dx * s, y - 0.5, z + oz + dz * s,
+      x + ox + dx * s, y + 0.5, z + oz + dz * s,
+      x + ox - dx * s, y + 0.5, z + oz - dz * s,
+    ])
+  }
+}
+
+// Append one animal's boxes to the texture buffers
+export function addMob(buffer, [type, x, top, z, turn], light) {
+  const rot = ([lx, lz]) => [[lx, lz], [lz, -lx], [-lx, -lz], [-lz, lx]][turn]
+  for (const part of MOBS[type]) {
+    for (let f = 0; f < 6; f++) {
+      const [wnx, wnz] = rot([FACES[f].n[0], FACES[f].n[2]])
+      const shadeFace = FACES.find((F) => F.n[0] === wnx && F.n[1] === FACES[f].n[1] && F.n[2] === wnz)
+      const v = toLinear(shadeFace.shade * light)
+      const b = buffer(part.faces[f])
+      const start = b.pos.length / 3
+      for (const { p, uv } of FACE_DATA[f].corners) {
+        const local = [0, 1, 2].map((a) => (part.min[a] + p[a] * (part.max[a] - part.min[a])) / 16)
+        const [wx, wz] = rot([local[0], local[2]])
+        b.pos.push(x + wx, top + 0.5 + local[1], z + wz)
+        b.uv.push(uv[0], uv[1])
+        b.col.push(v, v, v)
+      }
+      b.idx.push(start, start + 1, start + 2, start, start + 2, start + 3)
+    }
+  }
+}
+
+// Pack { tex: { pos, uv, col, idx } as plain arrays } into typed arrays
+export function packBuffers(buffers) {
+  const out = {}
+  for (const [tex, b] of Object.entries(buffers)) {
+    out[tex] = {
+      pos: new Float32Array(b.pos),
+      uv: new Float32Array(b.uv),
+      col: new Float32Array(b.col),
+      idx: new Uint32Array(b.idx),
+    }
+  }
+  return out
+}
+
+// The background panorama: mesh the planned world as seen from the camera
+export function generateWorld(biomeId, time) {
+  const plan = planWorld(biomeId)
+  const { biome, HALF, h, dist, terrainBlock, extra } = plan
+  const sunset = time === 'sunset'
+
   const blockAt = (x, y, z) => {
     const top = h(x, z)
     if (y <= top) return terrainBlock(x, y, z, top)
@@ -382,37 +509,7 @@ export function generateWorld(biomeId, time) {
   const light = (biome.light ?? 1) * (sunset ? SUNSET.light : 1)
   const buffers = {}
   const buffer = (tex) => (buffers[tex] ??= { pos: [], uv: [], col: [], idx: [] })
-  const toLinear = (v) => Math.min(1, v) ** 2.2
-
-  // Brightness for each face direction × corner occlusion level
-  const shadeLUT = FACES.map((face) => AO.map((ao) => toLinear(face.shade * ao * light)))
-
-  const addFace = (x, y, z, kind, f) => {
-    const { axis, corners } = FACE_DATA[f]
-    const b = buffer(BLOCK_FACES[kind][f])
-    const start = b.pos.length / 3
-    const inset = axis === 1 ? 0 : INSET[kind] ?? 0
-    let ao0, ao1, ao2, ao3
-    for (let k = 0; k < 4; k++) {
-      const { p, uv, around } = corners[k]
-      const [s1, s2, c] = around
-      const pos = [x - 0.5 + p[0], y - 0.5 + p[1], z - 0.5 + p[2]]
-      if (inset) pos[axis] += p[axis] ? -inset : inset
-      b.pos.push(pos[0], pos[1], pos[2])
-      b.uv.push(uv[0], uv[1])
-      // Ambient occlusion from the three blocks touching this corner, outside the face
-      const e1 = occludes(x + s1[0], y + s1[1], z + s1[2])
-      const e2 = occludes(x + s2[0], y + s2[1], z + s2[2])
-      const ec = occludes(x + c[0], y + c[1], z + c[2])
-      const ao = e1 && e2 ? 0 : 3 - (e1 + e2 + ec)
-      if (k === 0) ao0 = ao; else if (k === 1) ao1 = ao; else if (k === 2) ao2 = ao; else ao3 = ao
-      const v = shadeLUT[f][ao]
-      b.col.push(v, v, v)
-    }
-    // Flip the quad's diagonal where needed so the corner shading blends smoothly
-    if (ao0 + ao2 < ao1 + ao3) b.idx.push(start + 1, start + 2, start + 3, start + 1, start + 3, start)
-    else b.idx.push(start, start + 1, start + 2, start, start + 2, start + 3)
-  }
+  const addFace = faceMesher(buffer, occludes, light)
 
   const meshBlock = (x, y, z, kind) => {
     for (let f = 0; f < 6; f++) {
@@ -438,113 +535,51 @@ export function generateWorld(biomeId, time) {
     if (dist(x, z) <= HALF) meshBlock(x, y, z, kind)
   }
 
-  // Plants: two crossed planes standing on the ground
   const plantShade = toLinear(0.9 * light)
-  const quad = (b, corners) => {
-    const start = b.pos.length / 3
-    b.pos.push(...corners)
-    b.uv.push(0, 0, 1, 0, 1, 1, 0, 1)
-    for (let i = 0; i < 4; i++) b.col.push(plantShade, plantShade, plantShade)
-    b.idx.push(start, start + 1, start + 2, start, start + 2, start + 3)
-  }
-  const cross = (kind, x, y, z, ox, oz) => {
-    const s = 0.45
-    for (const [dx, dz] of [[1, 1], [1, -1]]) {
-      quad(buffer(kind), [
-        x + ox - dx * s, y - 0.5, z + oz - dz * s,
-        x + ox + dx * s, y - 0.5, z + oz + dz * s,
-        x + ox + dx * s, y + 0.5, z + oz + dz * s,
-        x + ox - dx * s, y + 0.5, z + oz - dz * s,
-      ])
-    }
-  }
-  const pr = rng(123)
-  const { sugarCane = 0, lilyPad = 0 } = biome.water === 'ice' ? {} : biome.shore ?? {}
-  const nearWater = (x, z) => h(x + 1, z) < sea || h(x - 1, z) < sea || h(x, z + 1) < sea || h(x, z - 1) < sea
-  for (let x = -HALF; x < HALF; x++) {
-    for (let z = -HALF; z < HALF; z++) {
-      if (dist(x, z) > HALF) continue
-      const top = h(x, z)
-      // Lily pads float on shallow water
-      if (top < sea) {
-        if (sea - top <= 3 && pr() < lilyPad) {
-          const y = sea + 0.42, s = 0.5
-          quad(buffer('lilyPad'), [x - s, y, z - s, x + s, y, z - s, x + s, y, z + s, x - s, y, z + s])
-        }
-        continue
-      }
-      if (extra.has(key(x, top + 1, z))) continue
-      // Sugar cane grows right at the water's edge
-      if (top <= sea + 1 && nearWater(x, z) && pr() < sugarCane) {
-        const tall = 1 + Math.floor(pr() * 3)
-        for (let i = 1; i <= tall; i++) cross('sugarCane', x, top + i, z, 0, 0)
-        continue
-      }
-      if (top <= sea) continue
-      for (const [kind, odds, on] of biome.plants ?? []) {
-        if (ground(x, z) !== on || pr() > odds) continue
-        cross(kind, x, top + 1, z, (pr() - 0.5) * 0.3, (pr() - 0.5) * 0.3)
-        break
-      }
-    }
-  }
+  for (const plant of plan.plants) addPlant(buffer, plant, plantShade)
+  for (const mob of plan.mobs) addMob(buffer, mob, light)
 
-  // Animals grazing within sight of the camera, on flat grass
-  const { kinds: mobKinds, count = 0 } = biome.animals ?? {}
-  const ar = rng(31)
-  const placed = []
-  for (let tries = 0; tries < 400 && placed.length < count; tries++) {
-    const angle = ar() * Math.PI * 2, d = 7 + ar() * 16
-    const x = Math.round(Math.cos(angle) * d), z = Math.round(Math.sin(angle) * d)
-    const top = h(x, z)
-    if (top <= sea + 1 || !['grass', 'snowGrass'].includes(ground(x, z))) continue
-    if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => h(x + dx, z + dz) !== top || extra.has(key(x + dx, top + 1, z + dz)))) continue
-    if (extra.has(key(x, top + 1, z)) || placed.some(([px, pz]) => Math.hypot(px - x, pz - z) < 3)) continue
-    placed.push([x, z])
-    const turn = Math.floor(ar() * 4)
-    const rot = ([lx, lz]) => [[lx, lz], [lz, -lx], [-lx, -lz], [-lz, lx]][turn]
-    for (const part of MOBS[pickWeighted(mobKinds, ar)]) {
-      for (let f = 0; f < 6; f++) {
-        const [wnx, wnz] = rot([FACES[f].n[0], FACES[f].n[2]])
-        const shadeFace = FACES.find((F) => F.n[0] === wnx && F.n[1] === FACES[f].n[1] && F.n[2] === wnz)
-        const v = toLinear(shadeFace.shade * light)
-        const b = buffer(part.faces[f])
-        const start = b.pos.length / 3
-        for (const { p, uv } of FACE_DATA[f].corners) {
-          const local = [0, 1, 2].map((a) => (part.min[a] + p[a] * (part.max[a] - part.min[a])) / 16)
-          const [wx, wz] = rot([local[0], local[2]])
-          b.pos.push(x + wx, top + 0.5 + local[1], z + wz)
-          b.uv.push(uv[0], uv[1])
-          b.col.push(v, v, v)
-        }
-        b.idx.push(start, start + 1, start + 2, start, start + 2, start + 3)
-      }
-    }
-  }
-
-  // Eye level just above the nearby ground, like a player looking out from a hill
-  let peak = sea
-  for (let x = -7; x <= 7; x++) for (let z = -7; z <= 7; z++) peak = Math.max(peak, h(x, z))
-  const eyeY = peak + (biome.eyeLift ?? 5)
-
-
-  // Hand back compact typed arrays (they can move between threads without copying)
-  const out = {}
-  for (const [tex, b] of Object.entries(buffers)) {
-    out[tex] = {
-      pos: new Float32Array(b.pos),
-      uv: new Float32Array(b.uv),
-      col: new Float32Array(b.col),
-      idx: new Uint32Array(b.idx),
-    }
-  }
+  const eyeY = plan.peak + (biome.eyeLift ?? 5)
   return {
-    buffers: out,
+    buffers: packBuffers(buffers),
     eyeY,
     half: HALF,
     waterShade: toLinear(0.95 * light),
     cloud: cloudGeometry(biome.cloudCover ?? 0.35, 5),
     cloudY: biome.cloudHeight ?? Math.max(eyeY + 24, 54),
+  }
+}
+
+// Returns addFace(x, y, z, kind, f): appends one block face with corner shading
+// to the right texture buffer. `occludes(x, y, z)` says whether a block darkens corners.
+export function faceMesher(buffer, occludes, light) {
+  // Brightness for each face direction × corner occlusion level
+  const shadeLUT = FACES.map((face) => AO.map((ao) => toLinear(face.shade * ao * light)))
+  return (x, y, z, kind, f) => {
+    const { axis, corners } = FACE_DATA[f]
+    const b = buffer(BLOCK_FACES[kind][f])
+    const start = b.pos.length / 3
+    const inset = axis === 1 ? 0 : INSET[kind] ?? 0
+    let ao0, ao1, ao2, ao3
+    for (let k = 0; k < 4; k++) {
+      const { p, uv, around } = corners[k]
+      const [s1, s2, c] = around
+      const pos = [x - 0.5 + p[0], y - 0.5 + p[1], z - 0.5 + p[2]]
+      if (inset) pos[axis] += p[axis] ? -inset : inset
+      b.pos.push(pos[0], pos[1], pos[2])
+      b.uv.push(uv[0], uv[1])
+      // Ambient occlusion from the three blocks touching this corner, outside the face
+      const e1 = occludes(x + s1[0], y + s1[1], z + s1[2])
+      const e2 = occludes(x + s2[0], y + s2[1], z + s2[2])
+      const ec = occludes(x + c[0], y + c[1], z + c[2])
+      const ao = e1 && e2 ? 0 : 3 - (e1 + e2 + ec)
+      if (k === 0) ao0 = ao; else if (k === 1) ao1 = ao; else if (k === 2) ao2 = ao; else ao3 = ao
+      const v = shadeLUT[f][ao]
+      b.col.push(v, v, v)
+    }
+    // Flip the quad's diagonal where needed so the corner shading blends smoothly
+    if (ao0 + ao2 < ao1 + ao3) b.idx.push(start + 1, start + 2, start + 3, start + 1, start + 3, start)
+    else b.idx.push(start, start + 1, start + 2, start, start + 2, start + 3)
   }
 }
 

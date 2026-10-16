@@ -1,13 +1,13 @@
-import { Compass, FileText, Flag, Sparkles } from 'lucide-react'
+import { Compass, FileText, Flag, Gamepad2, Sparkles, Trophy } from 'lucide-react'
 import { useToast } from '../lib/advancements'
 
-const ICONS = { start: Flag, explorer: Compass, resume: FileText, splash: Sparkles }
+const ICONS = { start: Flag, explorer: Compass, resume: FileText, splash: Sparkles, secret: Gamepad2 }
 
 // In-game style "Advancement Made!" popup, top-right.
 export default function Toast() {
   const toast = useToast()
   if (!toast) return null
-  const Icon = ICONS[toast.id]
+  const Icon = ICONS[toast.id] ?? Trophy
   return (
     <div className="toast" role="status" key={toast.id}>
       <div className="toast-icon"><Icon /></div>

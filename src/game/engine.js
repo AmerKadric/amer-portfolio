@@ -1,0 +1,474 @@
+// The hidden walk-around game: the background biome turned into an editable
+// block world, with first-person movement, block breaking/placing and a
+// day/night cycle. Drawn with the same tiny WebGL renderer as the panorama.
+
+import { createRenderer, hexColor } from '../lib/gl'
+import { worldTextures } from '../lib/textures'
+import { SUNSET } from '../lib/biomes'
+import {
+  planWorld, faceMesher, addPlant, addMob, packBuffers, cloudGeometry, toLinear,
+  BLOCK_FACES, FACES, INSET, SEE_THROUGH, PLANTS, CUTOUT, CLOUD_SPAN,
+} from '../lib/worldgen'
+
+// ---------- Tuning ----------
+const HEIGHT = 96 // world height in blocks
+const CHUNK = 16
+const REACH = 5
+const DAY_SECONDS = 300 // one full day/night cycle
+const GRAVITY = 28
+const JUMP = 8.6
+const WALK = 4.3
+const SPRINT = 6.2
+const PLAYER_W = 0.3 // half width
+const PLAYER_H = 1.8
+const EYE = 1.62
+
+// Blocks the player can place, in hotbar order
+export const HOTBAR = ['grass', 'dirt', 'stone', 'cobble', 'planks', 'log', 'glass', 'sand', 'bricks']
+
+const NIGHT_SKY = ['#04060e', '#0b1226', '#18213d']
+const NIGHT_FOG = '#0e1424'
+const NIGHT_LIGHT = [0.17, 0.19, 0.3]
+
+const smoothstep = (a, b, v) => {
+  const t = Math.min(1, Math.max(0, (v - a) / (b - a)))
+  return t * t * (3 - 2 * t)
+}
+const mix3 = (a, b, c, wa, wb, wc) => [0, 1, 2].map((i) => a[i] * wa + b[i] * wb + c[i] * wc)
+
+export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
+  const r = createRenderer(canvas)
+  if (!r) return null
+
+  // ---------- World data ----------
+  const plan = planWorld(biomeId)
+  const { biome, HALF, SIZE, sea, h, terrainBlock, extra } = plan
+  const names = ['air', ...Object.keys(BLOCK_FACES), ...PLANTS]
+  const id = Object.fromEntries(names.map((n, i) => [n, i]))
+  const grid = new Uint8Array(SIZE * SIZE * HEIGHT)
+  const at = (x, y, z) => ((x + HALF) * SIZE + (z + HALF)) * HEIGHT + y
+  const inWorld = (x, y, z) => x >= -HALF && x < HALF && z >= -HALF && z < HALF && y >= 0 && y < HEIGHT
+  const inCircle = (x, z) => Math.hypot(x - 0.5, z - 0.5) <= HALF - 0.5
+
+  for (let x = -HALF; x < HALF; x++) {
+    for (let z = -HALF; z < HALF; z++) {
+      if (!inCircle(x, z)) continue
+      const top = Math.min(h(x, z), HEIGHT - 1)
+      for (let y = 0; y <= top; y++) grid[at(x, y, z)] = id[terrainBlock(x, y, z, top)]
+    }
+  }
+  for (const [k, kind] of extra) {
+    const y = k % 256, xz = Math.floor(k / 256)
+    const x = Math.floor(xz / 256) - 128, z = (xz % 256) - 128
+    if (inWorld(x, y, z) && inCircle(x, z)) grid[at(x, y, z)] = id[kind]
+  }
+  for (const [kind, x, y, z] of plan.plants) {
+    if (inWorld(x, y, z) && inCircle(x, z) && !grid[at(x, y, z)]) grid[at(x, y, z)] = id[kind]
+  }
+
+  const nameAt = (x, y, z) => (inWorld(x, y, z) ? names[grid[at(x, y, z)]] : y < 0 ? 'stone' : 'air')
+  const isPlant = (n) => PLANTS.has(n)
+  // Blocks you bump into
+  const blocks = (x, y, z) => {
+    const n = nameAt(x, y, z)
+    return n !== 'air' && !isPlant(n)
+  }
+  // Hides the face next to it
+  const hides = (x, y, z) => {
+    const n = nameAt(x, y, z)
+    return n !== 'air' && !isPlant(n) && !SEE_THROUGH.has(n)
+  }
+  // Darkens corners
+  const occludes = (x, y, z) => {
+    const n = nameAt(x, y, z)
+    return n !== 'air' && !isPlant(n) && n !== 'cactus' && n !== 'glass'
+  }
+  // Below sea level and not inside a block: you're in the water
+  const isWater = (x, y, z) => y <= sea && inCircle(x, z) && nameAt(x, y, z) === 'air'
+
+  // ---------- Textures & materials ----------
+  const light = biome.light ?? 1
+  const sources = worldTextures(biome.palette)
+  const textures = {}
+  const tex = (name) => (textures[name] ??= r.texture(sources[name]()))
+  const itemFor = (name, mesh) => {
+    const item = { mesh, map: tex(name) }
+    if (PLANTS.has(name)) return { ...item, alphaTest: 0.5, cull: false, layer: 2 }
+    if (CUTOUT.has(name)) return { ...item, alphaTest: 0.5, layer: 1 }
+    return { ...item, layer: 0 }
+  }
+
+  // ---------- Chunk meshing ----------
+  const chunks = new Map() // "cx,cz" -> [items]
+  let itemsDirty = true // the draw list needs rebuilding
+  const chunkKey = (cx, cz) => `${cx},${cz}`
+  const plantShade = toLinear(0.9 * light)
+
+  function meshChunk(cx, cz) {
+    const buffers = {}
+    const buffer = (t) => (buffers[t] ??= { pos: [], uv: [], col: [], idx: [] })
+    const addFace = faceMesher(buffer, occludes, light)
+    const x0 = cx * CHUNK, z0 = cz * CHUNK
+    for (let x = x0; x < x0 + CHUNK; x++) {
+      for (let z = z0; z < z0 + CHUNK; z++) {
+        if (x < -HALF || x >= HALF || z < -HALF || z >= HALF) continue
+        const base = at(x, 0, z)
+        for (let y = 0; y < HEIGHT; y++) {
+          const b = grid[base + y]
+          if (!b) continue
+          const n = names[b]
+          if (isPlant(n)) {
+            addPlant(buffer, [n, x, y, z, 0, 0], plantShade)
+            continue
+          }
+          for (let f = 0; f < 6; f++) {
+            const [nx, ny, nz] = FACES[f].n
+            if (y === 0 && f === 3) continue
+            const nb = nameAt(x + nx, y + ny, z + nz)
+            if (n === 'glass' && nb === 'glass') continue
+            if (!hides(x + nx, y + ny, z + nz) || INSET[n]) addFace(x, y, z, n, f)
+          }
+        }
+      }
+    }
+    return Object.entries(packBuffers(buffers)).map(([t, b]) => itemFor(t, r.mesh(b)))
+  }
+
+  function rebuildChunk(cx, cz) {
+    const k = chunkKey(cx, cz)
+    chunks.get(k)?.forEach((item) => r.deleteMesh(item.mesh))
+    chunks.set(k, meshChunk(cx, cz))
+    itemsDirty = true
+  }
+
+  const cmin = Math.floor(-HALF / CHUNK), cmax = Math.floor((HALF - 1) / CHUNK)
+  for (let cx = cmin; cx <= cmax; cx++) for (let cz = cmin; cz <= cmax; cz++) rebuildChunk(cx, cz)
+
+  // Animals stand still as scenery
+  const mobBuffers = {}
+  const mobBuffer = (t) => (mobBuffers[t] ??= { pos: [], uv: [], col: [], idx: [] })
+  for (const mob of plan.mobs) addMob(mobBuffer, mob, light)
+  const mobItems = Object.entries(packBuffers(mobBuffers)).map(([t, b]) => itemFor(t, r.mesh(b)))
+
+  // ---------- Sky things ----------
+  const frozen = biome.water === 'ice'
+  const waterShade = toLinear(0.95 * light)
+  const waterTex = r.texture(sources[biome.water](), { repeat: true })
+  const water = {
+    mesh: r.mesh(disc(0.5, sea + (frozen ? 0.5 : 0.4), 0.5, HALF, 64)),
+    map: waterTex,
+    tint: [waterShade, waterShade, waterShade],
+    uvTransform: [HALF * 2, HALF * 2, 0, 0],
+    cull: false, // visible from underneath while swimming
+    ...(frozen ? {} : { blend: true, opacity: 0.8 }),
+  }
+  const cloudMesh = r.mesh(cloudGeometry(biome.cloudCover ?? 0.35, 5))
+  const cloudY = Math.max(plan.peak + 30, 70)
+  const clouds = [0, -CLOUD_SPAN].map((x) => ({ mesh: cloudMesh, blend: true, opacity: 0.82, fog: false, offset: [x, cloudY, 0] }))
+
+  const quad4 = () => r.mesh({ pos: new Float32Array(12), idx: new Uint32Array([0, 1, 2, 0, 2, 3]) }, { dynamic: true })
+  const sun = { mesh: quad4(), tint: hexColor('#fff6c8', true), glow: true, fog: false, cull: false }
+  const moon = { mesh: quad4(), tint: hexColor('#e8ecf4', true), glow: true, fog: false, cull: false }
+  const stars = { mesh: r.mesh(starField(500)), tint: [1, 1, 1], glow: true, fog: false, cull: false, blend: true, opacity: 0, depthWrite: false, offset: [0, 0, 0] }
+  const outline = {
+    mesh: r.mesh(cubeEdges(), { lines: true }),
+    tint: [0, 0, 0], glow: true, fog: false, blend: true, opacity: 0.7, offset: [0, 0, 0], depthWrite: false,
+  }
+
+  // ---------- Scene ----------
+  const [fogHex, fogNear, fogFar] = biome.fog
+  const view = { sky: [], fog: { color: [0, 0, 0], near: fogNear, far: Math.max(fogFar, 90) }, ambient: [1, 1, 1], items: [] }
+  let target = null // block the crosshair is on
+
+  function collectItems() {
+    const world = [...chunks.values()].flat()
+    view.items = [
+      stars, sun, moon,
+      ...world.filter((i) => i.layer === 0), ...mobItems,
+      ...world.filter((i) => i.layer === 1), ...world.filter((i) => i.layer === 2),
+      water, ...clouds,
+      ...(target ? [outline] : []),
+    ]
+    itemsDirty = false
+  }
+
+  // ---------- Player ----------
+  const topSolid = (x, z) => {
+    for (let y = HEIGHT - 1; y >= 0; y--) if (blocks(x, y, z)) return y
+    return 0
+  }
+  const spawn = () => ({ x: 0, y: topSolid(0, 0) + 0.5, z: 0 })
+  const player = { ...spawn(), vx: 0, vy: 0, vz: 0, yaw: 0, pitch: -0.15, onGround: false, inWater: false }
+
+  const cell = (v) => Math.round(v) // block b spans b-0.5 .. b+0.5
+  function collides(px, py, pz) {
+    for (let x = cell(px - PLAYER_W); x <= cell(px + PLAYER_W); x++) {
+      for (let y = cell(py + 0.001); y <= cell(py + PLAYER_H - 0.001); y++) {
+        for (let z = cell(pz - PLAYER_W); z <= cell(pz + PLAYER_W); z++) if (blocks(x, y, z)) return true
+      }
+    }
+    return false
+  }
+
+  // ---------- Input state (set by the UI) ----------
+  const input = { forward: 0, strafe: 0, jump: false, sprint: false, autoJump: false }
+  let selected = 0
+
+  function step(dt) {
+    const p = player
+    p.inWater = isWater(cell(p.x), cell(p.y + 0.4), cell(p.z))
+    const speed = (input.sprint && !p.inWater ? SPRINT : WALK) * (p.inWater ? 0.6 : 1)
+    const sin = Math.sin(p.yaw), cos = Math.cos(p.yaw)
+    let mx = -sin * input.forward + cos * input.strafe
+    let mz = -cos * input.forward - sin * input.strafe
+    const len = Math.hypot(mx, mz)
+    if (len > 1) { mx /= len; mz /= len }
+    p.vx = mx * speed
+    p.vz = mz * speed
+
+    if (p.inWater) {
+      p.vy = Math.max(p.vy - 8 * dt, -2.5)
+      if (input.jump) p.vy = 3.6
+    } else {
+      p.vy = Math.max(p.vy - GRAVITY * dt, -50)
+      if (input.jump && p.onGround) p.vy = JUMP
+    }
+
+    // Move one axis at a time in small steps, stopping at walls
+    const steps = Math.ceil(Math.max(Math.abs(p.vx), Math.abs(p.vy), Math.abs(p.vz)) * dt / 0.2) || 1
+    const sdt = dt / steps
+    let hitWall = false
+    p.onGround = false
+    for (let i = 0; i < steps; i++) {
+      if (!collides(p.x + p.vx * sdt, p.y, p.z)) p.x += p.vx * sdt
+      else hitWall = true
+      if (!collides(p.x, p.y, p.z + p.vz * sdt)) p.z += p.vz * sdt
+      else hitWall = true
+      if (!collides(p.x, p.y + p.vy * sdt, p.z)) p.y += p.vy * sdt
+      else {
+        if (p.vy < 0) p.onGround = true
+        p.vy = 0
+      }
+    }
+    // Hop up single blocks automatically (touch controls), like the game's auto-jump
+    if (input.autoJump && hitWall && p.onGround && len > 0.1 && !collides(p.x, p.y + 1.1, p.z)) p.vy = JUMP
+
+    // Stay inside the world's circle; fall out the bottom and you respawn
+    const d = Math.hypot(p.x - 0.5, p.z - 0.5), limit = HALF - 2
+    if (d > limit) {
+      p.x = 0.5 + ((p.x - 0.5) / d) * limit
+      p.z = 0.5 + ((p.z - 0.5) / d) * limit
+    }
+    if (p.y < -20) Object.assign(p, spawn(), { vy: 0 })
+  }
+
+  // ---------- Aiming ----------
+  function lookDir() {
+    const cp = Math.cos(player.pitch)
+    return [-Math.sin(player.yaw) * cp, Math.sin(player.pitch), -Math.cos(player.yaw) * cp]
+  }
+
+  // Step through the block grid along the view ray (blocks are centred on integers)
+  function raycast() {
+    const o = [player.x + 0.5, player.y + EYE + 0.5, player.z + 0.5]
+    const d = lookDir()
+    const c = o.map(Math.floor)
+    const stepDir = d.map((v) => (v > 0 ? 1 : -1))
+    const tDelta = d.map((v) => (v === 0 ? Infinity : Math.abs(1 / v)))
+    const tMax = d.map((v, i) => (v === 0 ? Infinity : ((v > 0 ? c[i] + 1 - o[i] : o[i] - c[i]) / Math.abs(v))))
+    let prev = null
+    for (let t = 0; t <= REACH; ) {
+      const n = nameAt(c[0], c[1], c[2])
+      if (n !== 'air') return { hit: [...c], prev }
+      prev = [...c]
+      const axis = tMax[0] < tMax[1] ? (tMax[0] < tMax[2] ? 0 : 2) : tMax[1] < tMax[2] ? 1 : 2
+      t = tMax[axis]
+      c[axis] += stepDir[axis]
+      tMax[axis] += tDelta[axis]
+    }
+    return null
+  }
+
+  // Rebuild the chunk holding a block, plus neighbours it touches (for culling and shading)
+  function changed(x, z) {
+    const touched = new Set()
+    for (const dx of [-1, 0, 1]) for (const dz of [-1, 0, 1]) touched.add(chunkKey(Math.floor((x + dx) / CHUNK), Math.floor((z + dz) / CHUNK)))
+    touched.forEach((k) => {
+      const [cx, cz] = k.split(',').map(Number)
+      if (chunks.has(k)) rebuildChunk(cx, cz)
+    })
+  }
+
+  function breakBlock() {
+    const t = raycast()
+    if (!t) return false
+    const [x, y, z] = t.hit
+    if (!inWorld(x, y, z)) return false
+    grid[at(x, y, z)] = 0
+    if (inWorld(x, y + 1, z) && isPlant(names[grid[at(x, y + 1, z)]])) grid[at(x, y + 1, z)] = 0 // plants fall with their ground
+    changed(x, z)
+    return true
+  }
+
+  function placeBlock() {
+    const t = raycast()
+    if (!t?.prev) return false
+    const [x, y, z] = t.prev
+    if (!inWorld(x, y, z) || !inCircle(x, z)) return false
+    const existing = names[grid[at(x, y, z)]]
+    if (existing !== 'air' && !isPlant(existing)) return false
+    // Don't build inside yourself
+    const p = player
+    if (Math.abs(x - p.x) < 0.5 + PLAYER_W && Math.abs(z - p.z) < 0.5 + PLAYER_W && y + 0.5 > p.y && y - 0.5 < p.y + PLAYER_H) return false
+    grid[at(x, y, z)] = id[HOTBAR[selected]]
+    changed(x, z)
+    return true
+  }
+
+  // ---------- Day / night ----------
+  // 0 = sunrise, 0.25 = noon, 0.5 = sunset, 0.75 = midnight
+  let dayTime = time === 'sunset' ? 0.47 : 0.12
+  const daySky = biome.sky.map((c) => hexColor(c))
+  const sunsetSky = SUNSET.sky.map((c) => hexColor(c))
+  const nightSky = NIGHT_SKY.map((c) => hexColor(c))
+  const dayFog = hexColor(fogHex, true), sunsetFog = hexColor(SUNSET.fog, true), nightFog = hexColor(NIGHT_FOG, true)
+  const sunsetLight = hexColor(SUNSET.tint, true).map((c) => c * SUNSET.light)
+
+  function updateSky(eye) {
+    const angle = dayTime * Math.PI * 2
+    const elevation = Math.sin(angle)
+    const day = smoothstep(0.02, 0.35, elevation)
+    const night = smoothstep(0.05, -0.25, elevation)
+    const dusk = Math.max(0, 1 - day - night)
+    view.sky = [0, 1, 2].map((i) => mix3(daySky[i], sunsetSky[i], nightSky[i], day, dusk, night))
+    view.fog.color = mix3(dayFog, sunsetFog, nightFog, day, dusk, night)
+    view.ambient = mix3([1, 1, 1], sunsetLight, NIGHT_LIGHT, day, dusk, night)
+    stars.opacity = night
+    stars.offset = eye
+
+    // Sun and moon travel across the sky opposite each other, always far away from you
+    const dir = norm([Math.cos(angle), Math.sin(angle), -0.35])
+    r.updateMesh(sun.mesh, billboard(eye, dir, 150, 16))
+    r.updateMesh(moon.mesh, billboard(eye, dir.map((v) => -v), 150, 12))
+    sun.tint = elevation < 0.15 ? hexColor('#ffb062', true) : hexColor('#fff6c8', true)
+  }
+
+  // ---------- Loop ----------
+  let raf = 0, last = performance.now(), drift = 0, size = [0, 0]
+  const camera = { fov: 75, near: 0.05, far: 260, position: [0, 0, 0], yaw: 0, pitch: 0 }
+
+  function resize() {
+    const w = Math.max(1, window.innerWidth), hgt = Math.max(1, window.innerHeight)
+    if (w === size[0] && hgt === size[1]) return
+    size = [w, hgt]
+    r.setSize(w, hgt, Math.min(window.devicePixelRatio, 1.5))
+  }
+
+  function frame(now) {
+    raf = requestAnimationFrame(frame)
+    resize()
+    const dt = Math.min((now - last) / 1000, 0.05)
+    last = now
+    step(dt)
+    dayTime = (dayTime + dt / DAY_SECONDS) % 1
+
+    const eye = [player.x, player.y + EYE, player.z]
+    camera.position = eye
+    camera.yaw = player.yaw
+    camera.pitch = player.pitch
+    updateSky(eye)
+
+    drift = (drift + dt * 0.8) % CLOUD_SPAN
+    clouds[0].offset[0] = drift
+    clouds[1].offset[0] = drift - CLOUD_SPAN
+    if (!frozen) {
+      water.uvTransform[2] = (water.uvTransform[2] + dt * 0.03) % 1
+      water.uvTransform[3] = (water.uvTransform[3] + dt * 0.015) % 1
+    }
+
+    const t = raycast()
+    const hadTarget = !!target
+    target = t?.hit ?? null
+    if (target) outline.offset = target
+    if (hadTarget !== !!target) itemsDirty = true
+    if (itemsDirty) collectItems()
+
+    onUnderwater?.(isWater(cell(eye[0]), cell(eye[1]), cell(eye[2])))
+    r.render(view, camera)
+  }
+  raf = requestAnimationFrame(frame)
+
+  return {
+    input,
+    look(dx, dy) {
+      player.yaw -= dx
+      player.pitch = Math.max(-1.55, Math.min(1.55, player.pitch - dy))
+    },
+    select(i) {
+      selected = ((i % HOTBAR.length) + HOTBAR.length) % HOTBAR.length
+      return selected
+    },
+    breakBlock,
+    placeBlock,
+    hotbarIcons: () => HOTBAR.map((n) => sources[BLOCK_FACES[n][0]]().toDataURL()),
+    dispose() {
+      cancelAnimationFrame(raf)
+      r.dispose()
+    },
+  }
+}
+
+// ---------- Geometry helpers ----------
+
+const norm = (v) => {
+  const l = Math.hypot(...v)
+  return v.map((c) => c / l)
+}
+
+// Square facing the viewer, `dist` away along `dir`
+function billboard(eye, dir, dist, size) {
+  const c = eye.map((e, i) => e + dir[i] * dist)
+  let right = norm([-dir[2], 0, dir[0]])
+  if (!isFinite(right[0])) right = [1, 0, 0]
+  const up = [dir[1] * right[2] - dir[2] * right[1], dir[2] * right[0] - dir[0] * right[2], dir[0] * right[1] - dir[1] * right[0]]
+  const hs = size / 2
+  const corner = (a, b) => c.map((v, i) => v + right[i] * a * hs + up[i] * b * hs)
+  return new Float32Array([...corner(-1, -1), ...corner(1, -1), ...corner(1, 1), ...corner(-1, 1)])
+}
+
+function disc(cx, y, cz, radius, segments) {
+  const pos = [cx, y, cz], uv = [0.5, 0.5], idx = []
+  for (let i = 0; i <= segments; i++) {
+    const a = (i / segments) * Math.PI * 2
+    pos.push(cx + Math.cos(a) * radius, y, cz - Math.sin(a) * radius)
+    uv.push((Math.cos(a) + 1) / 2, (Math.sin(a) + 1) / 2)
+    if (i > 0) idx.push(0, i, i + 1)
+  }
+  return { pos: new Float32Array(pos), uv: new Float32Array(uv), idx: new Uint32Array(idx) }
+}
+
+// Small square stars scattered over the sky, around the origin (moved to the eye each frame)
+function starField(count) {
+  const pos = [], idx = []
+  let seed = 9
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+  for (let i = 0; i < count; i++) {
+    const a = rand() * Math.PI * 2, e = Math.asin(0.05 + rand() * 0.95) // above the horizon
+    const dir = [Math.cos(e) * Math.cos(a), Math.sin(e), Math.cos(e) * Math.sin(a)]
+    const quad = billboard([0, 0, 0], dir, 120, 0.35 + rand() * 0.35)
+    const start = pos.length / 3
+    pos.push(...quad)
+    idx.push(start, start + 1, start + 2, start, start + 2, start + 3)
+  }
+  return { pos: new Float32Array(pos), idx: new Uint32Array(idx) }
+}
+
+// The 12 edges of a block, slightly oversized so they sit on top of its faces
+function cubeEdges() {
+  const s = 0.502
+  const pos = []
+  for (const x of [-s, s]) for (const y of [-s, s]) for (const z of [-s, s]) pos.push(x, y, z)
+  const idx = [0, 1, 2, 3, 4, 5, 6, 7, 0, 2, 1, 3, 4, 6, 5, 7, 0, 4, 1, 5, 2, 6, 3, 7]
+  return { pos: new Float32Array(pos), idx: new Uint32Array(idx) }
+}
+

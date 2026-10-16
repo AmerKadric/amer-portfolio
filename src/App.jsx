@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Volume2, VolumeX, Settings } from 'lucide-react'
 import Title from './screens/Title'
 import Experience from './screens/Experience'
@@ -18,6 +18,9 @@ import { unlock, visitScreen } from './lib/advancements'
 import { profile } from './data'
 import { loadWorld, pickScene } from './lib/sceneLoader'
 
+
+// The hidden game is only downloaded when someone finds it
+const Game = lazy(() => import('./game/Game'))
 
 const SCREENS = {
   experience: [Experience, 'Experience'],
@@ -39,16 +42,18 @@ export default function App() {
   }, [biomeSetting, timeSetting])
   const [worldReady, setWorldReady] = useState(false)
   const [unlocked, setUnlocked] = useState(isUnlocked)
+  const playing = route === 'play'
   const [Current, label] = SCREENS[route] ?? [Title, null]
 
   useEffect(() => visitScreen(route), [route])
 
   useEffect(() => {
-    document.title = label ? `${label} | ${profile.name}` : `${profile.name} | ${profile.role}`
-  }, [label])
+    document.title = playing ? `Play | ${profile.name}` : label ? `${label} | ${profile.name}` : `${profile.name} | ${profile.role}`
+  }, [label, playing])
 
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && route && go('')
+    // In the game, Esc pauses (handled by the game) instead of leaving
+    const onKey = (e) => e.key === 'Escape' && route && route !== 'play' && go('')
     const onClick = (e) => {
       const btn = e.target.closest('.mc-btn, .enchant-row, .slot-row, .entry')
       if (btn && !btn.disabled) playClick()
@@ -65,9 +70,14 @@ export default function App() {
   return (
     <>
       <Backdrop scene={scene} hidden={worldReady} />
-      <Panorama scene={scene} onReady={setWorldReady} />
+      <Panorama scene={scene} onReady={setWorldReady} paused={playing} />
       {/* The world keeps building behind the passcode screen, so it's ready on unlock */}
-      {!unlocked ? <Gate onUnlock={() => setUnlocked(true)} /> : <>
+      {!unlocked ? <Gate onUnlock={() => setUnlocked(true)} /> : playing ? (
+        <Suspense fallback={<div className="game-overlay"><h1>Loading…</h1></div>}>
+          <Game scene={scene} onExit={() => go('')} />
+          <Toast />
+        </Suspense>
+      ) : <>
       <div className="screen-wrap" key={route}>
         <Current />
       </div>

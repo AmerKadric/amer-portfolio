@@ -34,6 +34,7 @@ uniform bool useMap;
 uniform vec3 tint;
 uniform float opacity;
 uniform float alphaTest;
+uniform vec3 ambient; // overall light level (day/night); 1 = full daylight
 uniform bool useFog;
 uniform vec3 fogColor;
 uniform vec2 fogRange;
@@ -43,7 +44,7 @@ vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.
 void main() {
   vec4 t = useMap ? texture(map, vUv) : vec4(1.0);
   if (t.a < alphaTest) discard;
-  vec3 c = toLinear(t.rgb) * vColor * tint;
+  vec3 c = toLinear(t.rgb) * vColor * tint * ambient;
   if (useFog) c = mix(c, fogColor, smoothstep(fogRange.x, fogRange.y, vDepth));
   outColor = vec4(toSRGB(c), t.a * opacity);
 }`
@@ -124,8 +125,8 @@ export function createRenderer(canvas) {
 
   const mesh = program(gl, MESH_VERT, MESH_FRAG)
   const sky = program(gl, SKY_VERT, SKY_FRAG)
-  const aniso = gl.getExtension('EXT_texture_filter_anisotropic')
   const owned = { buffers: [], textures: [], vaos: [] }
+  const meshes = new Set()
 
   const skyVao = gl.createVertexArray()
   gl.bindVertexArray(skyVao)
@@ -138,7 +139,8 @@ export function createRenderer(canvas) {
   owned.vaos.push(skyVao)
 
   return {
-    // Pixel-art texture from a canvas: crisp up close, mipmapped in the distance
+    // Pixel-art texture from a canvas: crisp up close, mipmapped in the distance.
+    // (No anisotropic filtering: on some drivers it smooths textures up close too.)
     texture(source, { repeat = false } = {}) {
       const t = gl.createTexture()
       gl.bindTexture(gl.TEXTURE_2D, t)
@@ -150,15 +152,14 @@ export function createRenderer(canvas) {
       const wrap = repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
-      if (aniso) {
-        gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT))
-      }
       owned.textures.push(t)
       return t
     },
 
-    // Upload geometry: { pos, col, idx } and optionally uv
-    mesh({ pos, uv, col, idx }) {
+    // Upload geometry: { pos, col, idx } and optionally uv. `lines` draws idx as line pairs;
+    // `dynamic` meshes can have their positions replaced every frame (updateMesh).
+    mesh({ pos, uv, col, idx }, { lines = false, dynamic = false } = {}) {
+      const bufs = {}
       const vao = gl.createVertexArray()
       gl.bindVertexArray(vao)
       const attr = (name, data, size) => {
@@ -170,10 +171,10 @@ export function createRenderer(canvas) {
         }
         const b = gl.createBuffer()
         gl.bindBuffer(gl.ARRAY_BUFFER, b)
-        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW)
+        gl.bufferData(gl.ARRAY_BUFFER, data, dynamic ? gl.DYNAMIC_DRAW : gl.STATIC_DRAW)
         gl.enableVertexAttribArray(loc)
         gl.vertexAttribPointer(loc, size, gl.FLOAT, false, 0, 0)
-        owned.buffers.push(b)
+        bufs[name] = b
       }
       attr('position', pos, 3)
       attr('uv', uv, 2)
@@ -181,12 +182,25 @@ export function createRenderer(canvas) {
       const ib = gl.createBuffer()
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib)
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW)
-      owned.buffers.push(ib)
-      owned.vaos.push(vao)
+      bufs.idx = ib
+      gl.bindVertexArray(null)
       // Missing attributes read a constant instead: white vertex colour, zero uv
-      if (!uv) gl.vertexAttrib2f(mesh.attrib('uv'), 0, 0)
-      if (!col) gl.vertexAttrib3f(mesh.attrib('color'), 1, 1, 1)
-      return { vao, count: idx.length, constUv: !uv, constCol: !col }
+      const m = { vao, bufs, count: idx.length, constUv: !uv, constCol: !col, lines }
+      meshes.add(m)
+      return m
+    },
+
+    // Replace a dynamic mesh's vertex positions (same vertex count)
+    updateMesh(m, pos) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, m.bufs.position)
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, pos)
+    },
+
+    // Free a mesh's GPU memory (e.g. when a chunk of the world is rebuilt)
+    deleteMesh(m) {
+      if (!meshes.delete(m)) return
+      Object.values(m.bufs).forEach((b) => gl.deleteBuffer(b))
+      gl.deleteVertexArray(m.vao)
     },
 
     setSize(width, height, ratio) {
@@ -194,7 +208,7 @@ export function createRenderer(canvas) {
       canvas.height = Math.max(1, Math.round(height * ratio))
     },
 
-    // scene: { sky: [top, mid, horizon] (sRGB 0–1), fog: { color (linear), near, far }, items: [...] }
+    // scene: { sky: [top, mid, horizon] (sRGB 0–1), fog: { color (linear), near, far }, ambient?, items: [...] }
     // camera: { fov, near, far, position, yaw, pitch }
     render(scene, camera) {
       gl.viewport(0, 0, canvas.width, canvas.height)
@@ -214,6 +228,7 @@ export function createRenderer(canvas) {
       const u = mesh.uniforms
       gl.uniformMatrix4fv(u.proj, false, perspective(camera.fov, canvas.width / canvas.height, camera.near, camera.far))
       gl.uniformMatrix4fv(u.view, false, viewMatrix(camera.position, camera.yaw, camera.pitch))
+      const ambient = scene.ambient ?? [1, 1, 1]
       gl.uniform3fv(u.fogColor, scene.fog.color)
       gl.uniform2f(u.fogRange, scene.fog.near, scene.fog.far)
       gl.uniform1i(u.map, 0)
@@ -229,20 +244,24 @@ export function createRenderer(canvas) {
         gl.uniform1i(u.useMap, item.map ? 1 : 0)
         if (item.map) gl.bindTexture(gl.TEXTURE_2D, item.map)
         gl.uniform3fv(u.tint, item.tint ?? [1, 1, 1])
+        gl.uniform3fv(u.ambient, item.glow ? [1, 1, 1] : ambient)
         gl.uniform1f(u.opacity, item.opacity ?? 1)
         gl.uniform1f(u.alphaTest, item.alphaTest ?? 0)
         gl.uniform1i(u.useFog, item.fog === false ? 0 : 1)
+        gl.depthMask(item.depthWrite !== false)
         gl.uniform3fv(u.offset, item.offset ?? [0, 0, 0])
         gl.uniform4fv(u.uvTransform, item.uvTransform ?? [1, 1, 0, 0])
         gl.bindVertexArray(item.mesh.vao)
         if (item.mesh.constUv) gl.vertexAttrib2f(mesh.attrib('uv'), 0, 0)
         if (item.mesh.constCol) gl.vertexAttrib3f(mesh.attrib('color'), 1, 1, 1)
-        gl.drawElements(gl.TRIANGLES, item.mesh.count, gl.UNSIGNED_INT, 0)
+        gl.drawElements(item.mesh.lines ? gl.LINES : gl.TRIANGLES, item.mesh.count, gl.UNSIGNED_INT, 0)
       }
+      gl.depthMask(true)
       gl.bindVertexArray(null)
     },
 
     dispose() {
+      ;[...meshes].forEach((m) => this.deleteMesh(m))
       owned.buffers.forEach((b) => gl.deleteBuffer(b))
       owned.textures.forEach((t) => gl.deleteTexture(t))
       owned.vaos.forEach((v) => gl.deleteVertexArray(v))

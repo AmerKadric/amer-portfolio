@@ -95,12 +95,14 @@ function buildScene(r, world, biome, time) {
   return { items, clouds, water: frozen ? null : water }
 }
 
-export default function Panorama({ scene: picked, onReady }) {
+export default function Panorama({ scene: picked, onReady, paused = false }) {
   const canvasRef = useRef(null)
   const { motion, blur } = useSettings()
   const [ready, setReady] = useState(false)
   const motionRef = useRef(motion)
   motionRef.current = motion
+  const pausedRef = useRef(paused)
+  pausedRef.current = paused
   const blurRef = useRef(blur)
   blurRef.current = blur
   const resizeRef = useRef(null)
@@ -160,7 +162,7 @@ export default function Panorama({ scene: picked, onReady }) {
       raf = requestAnimationFrame(tick)
       // Catch size changes that arrive without a resize event (e.g. a tab opened in the background)
       if (window.innerWidth !== sizedW || window.innerHeight !== sizedH) resize()
-      if (!world || !motionRef.current || now - last < FRAME_MS) return
+      if (!world || pausedRef.current || !motionRef.current || now - last < FRAME_MS) return
       const dt = Math.min((now - last) / 1000, 0.1)
       last = now
       camera.yaw += dt * TURN_SPEED

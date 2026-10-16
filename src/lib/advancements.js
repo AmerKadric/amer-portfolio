@@ -9,6 +9,7 @@ export const ADVANCEMENTS = {
   explorer: { title: 'Adventuring Time', desc: 'Visit every screen' },
   resume: { title: 'Paper Trail', desc: 'Download the resume' },
   splash: { title: 'Splash Zone', desc: 'Reroll the splash text twice' },
+  secret: { title: 'Into the World', desc: 'Find the hidden game' },
 }
 
 const SCREENS = ['experience', 'projects', 'about', 'skills', 'contact']
