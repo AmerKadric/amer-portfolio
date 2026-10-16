@@ -18,6 +18,7 @@ const REACH = 5
 const DAY_SECONDS = 300 // one full day/night cycle
 const GRAVITY = 28
 const JUMP = 8.6
+const WATER_EXIT = 9.6 // enough to clear a one-block bank from the water's surface
 const WALK = 4.3
 const SPRINT = 6.2
 const PLAYER_W = 0.3 // half width
@@ -238,7 +239,7 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
 
     if (p.inWater) {
       p.vy = Math.max(p.vy - 8 * dt, -2.5)
-      if (input.jump) p.vy = 3.6
+      if (input.jump) p.vy = Math.max(p.vy, 3.6) // swim up (never cancels a stronger push)
     } else {
       p.vy = Math.max(p.vy - GRAVITY * dt, -50)
       if (input.jump && p.onGround) p.vy = JUMP
@@ -262,6 +263,8 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     }
     // Hop up single blocks automatically (touch controls), like the game's auto-jump
     if (input.autoJump && hitWall && p.onGround && len > 0.1 && !collides(p.x, p.y + 1.1, p.z)) p.vy = JUMP
+    // Swimming into the edge while jumping (or moving, on touch) pops you out onto the bank
+    if (p.inWater && hitWall && len > 0.1 && (input.jump || input.autoJump) && !collides(p.x, p.y + 1.6, p.z)) p.vy = WATER_EXIT
 
     // Stay inside the world's circle; fall out the bottom and you respawn
     const d = Math.hypot(p.x - 0.5, p.z - 0.5), limit = HALF - 2
