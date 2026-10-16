@@ -11,13 +11,14 @@ in vec2 uv;
 in vec3 color;
 uniform mat4 proj;
 uniform mat4 view;
+uniform mat4 model; // per-item transform (moving animals); identity for everything else
 uniform vec3 offset;
 uniform vec4 uvTransform; // xy: scale, zw: offset
 out vec2 vUv;
 out vec3 vColor;
 out float vDepth;
 void main() {
-  vec4 mv = view * vec4(position + offset, 1.0);
+  vec4 mv = view * (model * vec4(position + offset, 1.0));
   vDepth = -mv.z;
   vUv = uv * uvTransform.xy + uvTransform.zw;
   vColor = color;
@@ -70,6 +71,8 @@ void main() {
   vec3 c = t < 0.55 ? mix(top, mid, t / 0.55) : mix(mid, horizon, (t - 0.55) / 0.45);
   outColor = vec4(c, 1.0);
 }`
+
+const IDENTITY = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
 
 // '#rrggbb' → [r, g, b] in 0–1 (sRGB), optionally converted to linear
 export function hexColor(hex, linear = false) {
@@ -250,6 +253,7 @@ export function createRenderer(canvas) {
         gl.uniform1i(u.useFog, item.fog === false ? 0 : 1)
         gl.depthMask(item.depthWrite !== false)
         gl.uniform3fv(u.offset, item.offset ?? [0, 0, 0])
+        gl.uniformMatrix4fv(u.model, false, item.model ?? IDENTITY)
         gl.uniform4fv(u.uvTransform, item.uvTransform ?? [1, 1, 0, 0])
         gl.bindVertexArray(item.mesh.vao)
         if (item.mesh.constUv) gl.vertexAttrib2f(mesh.attrib('uv'), 0, 0)

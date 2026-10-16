@@ -3,10 +3,11 @@
 // day/night cycle. Drawn with the same tiny WebGL renderer as the panorama.
 
 import { createRenderer, hexColor } from '../lib/gl'
+import { createMobs } from './mobs'
 import { worldTextures } from '../lib/textures'
 import { SUNSET } from '../lib/biomes'
 import {
-  planWorld, faceMesher, addPlant, addMob, packBuffers, cloudGeometry, toLinear,
+  planWorld, faceMesher, addPlant, packBuffers, cloudGeometry, toLinear,
   BLOCK_FACES, FACES, INSET, SEE_THROUGH, PLANTS, CUTOUT, CLOUD_SPAN,
 } from '../lib/worldgen'
 
@@ -144,11 +145,8 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
   const cmin = Math.floor(-HALF / CHUNK), cmax = Math.floor((HALF - 1) / CHUNK)
   for (let cx = cmin; cx <= cmax; cx++) for (let cz = cmin; cz <= cmax; cz++) rebuildChunk(cx, cz)
 
-  // Animals stand still as scenery
-  const mobBuffers = {}
-  const mobBuffer = (t) => (mobBuffers[t] ??= { pos: [], uv: [], col: [], idx: [] })
-  for (const mob of plan.mobs) addMob(mobBuffer, mob, light)
-  const mobItems = Object.entries(packBuffers(mobBuffers)).map(([t, b]) => itemFor(t, r.mesh(b)))
+  // Animals that wander around
+  const mobs = createMobs({ renderer: r, plan, light, itemFor, blocks, nameAt, isWater, inCircle })
 
   // ---------- Sky things ----------
   const frozen = biome.water === 'ice'
@@ -184,7 +182,7 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     const world = [...chunks.values()].flat()
     view.items = [
       stars, sun, moon,
-      ...world.filter((i) => i.layer === 0), ...mobItems,
+      ...world.filter((i) => i.layer === 0), ...mobs.items,
       ...world.filter((i) => i.layer === 1), ...world.filter((i) => i.layer === 2),
       water, ...clouds,
       ...(target ? [outline] : []),
@@ -197,7 +195,19 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     for (let y = HEIGHT - 1; y >= 0; y--) if (blocks(x, y, z)) return y
     return 0
   }
-  const spawn = () => ({ x: 0, y: topSolid(0, 0) + 0.5, z: 0 })
+  // Start on the nearest dry land to the middle of the world (the centre can be a lake)
+  const spawnPoint = (() => {
+    for (let radius = 0; radius < HALF - 4; radius++) {
+      for (let i = 0; i < Math.max(1, radius * 8); i++) {
+        const a = (i / Math.max(1, radius * 8)) * Math.PI * 2
+        const x = Math.round(Math.cos(a) * radius), z = Math.round(Math.sin(a) * radius)
+        const top = topSolid(x, z)
+        if (top > sea && !blocks(x, top + 1, z) && !blocks(x, top + 2, z)) return { x, y: top + 0.5, z }
+      }
+    }
+    return { x: 0, y: topSolid(0, 0) + 0.5, z: 0 }
+  })()
+  const spawn = () => ({ ...spawnPoint })
   const player = { ...spawn(), vx: 0, vy: 0, vz: 0, yaw: 0, pitch: -0.15, onGround: false, inWater: false }
 
   const cell = (v) => Math.round(v) // block b spans b-0.5 .. b+0.5
@@ -370,6 +380,7 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater } = {}) {
     const dt = Math.min((now - last) / 1000, 0.05)
     last = now
     step(dt)
+    mobs.update(dt)
     dayTime = (dayTime + dt / DAY_SECONDS) % 1
 
     const eye = [player.x, player.y + EYE, player.z]
