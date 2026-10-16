@@ -477,6 +477,25 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater, onHealth, 
     swingTime = 0.3
   }
 
+  // The game's sword slash: the hand darts in and down toward the centre along a short curve while the
+  // blade tips forward and across, then snaps back. p runs 0 → 1 over the swing.
+  const SWORD_HANDLE = [0.123, -0.225, 0.188] // where the grip sits relative to the sprite's centre
+  function swordModel(p, bx, by) {
+    const arc = Math.sin(Math.sqrt(p) * Math.PI) // rises fast, eases back: the snappy part
+    const dip = Math.sin(Math.sqrt(p) * Math.PI * 2) // up a touch, then down: the curve of the arc
+    const turn = Math.sin(p * p * Math.PI) // lags behind, so the blade follows through
+    const [hx, hy, hz] = SWORD_HANDLE
+    return chain(
+      // Resting low on the right, blade angled up and in
+      translate(0.46 + bx - arc * 0.2, -0.36 + by + dip * 0.05 + arc * 0.04, -0.9 - Math.sin(p * Math.PI) * 0.1),
+      // Swing around the grip rather than the middle of the blade
+      translate(hx, hy, hz),
+      rotateZ(arc * 1.15), rotateX(-turn * 0.3),
+      translate(-hx, -hy, -hz),
+      rotateY(2.15), rotateZ(-0.05), scale(0.5),
+    )
+  }
+
   function handOverlay(dt) {
     if (player.dead) return []
     swingTime = Math.max(0, swingTime - dt)
@@ -489,11 +508,7 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater, onHealth, 
     // On touch screens the controls cover the bottom-right corner, so hold things a little higher
     const lift = input.autoJump ? 0.14 : 0
     const model = isTool(name)
-      ? chain(
-          // Handle bottom-right, blade angled up and in toward the middle; swings down on a hit
-          translate(0.46 + bx - s * 0.18, -0.36 + lift + by + s * 0.05, -0.9 - s * 0.12),
-          rotateY(2.15), rotateZ(-0.05 - s * 0.8), rotateX(s * 0.35), scale(0.5),
-        )
+      ? swordModel(swingTime > 0 ? 1 - swingTime / 0.3 : 0, bx, by + lift)
       : chain(
           translate(0.52 + bx - s * 0.2, -0.46 + lift + by + s * 0.06, -0.95 - s * 0.1),
           rotateX(0.25 - s * 0.6), rotateY(0.78), scale(0.36),
