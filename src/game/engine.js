@@ -592,7 +592,12 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater, onHealth, 
     primary,
     placeBlock,
     respawn,
-    hotbarIcons: () => HOTBAR.map((n) => (isTool(n) ? sources[n]() : sources[BLOCK_FACES[n][0]]()).toDataURL()),
+    hotbarIcons: () =>
+      HOTBAR.map((n) => {
+        if (isTool(n)) return sources[n]().toDataURL() // tools are flat sprites, like in the game
+        const [side, , top] = BLOCK_FACES[n]
+        return blockIcon(sources[top](), sources[side](), sources[side]()).toDataURL()
+      }),
     dispose() {
       cancelAnimationFrame(raf)
       r.dispose()
@@ -601,6 +606,30 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater, onHealth, 
 }
 
 // ---------- Geometry helpers ----------
+
+// A block as the inventory shows it: a little 3D cube with a lit top and two shaded sides
+function blockIcon(top, left, right) {
+  const out = document.createElement('canvas')
+  out.width = out.height = 128
+  const g = out.getContext('2d')
+  g.imageSmoothingEnabled = false
+  const face = (tex, light, [a, b, c, d, e, f]) => {
+    const t = document.createElement('canvas')
+    t.width = t.height = 16
+    const tg = t.getContext('2d')
+    tg.drawImage(tex, 0, 0)
+    tg.globalCompositeOperation = 'source-atop' // darken only the painted pixels
+    tg.fillStyle = `rgba(0, 0, 0, ${1 - light})`
+    tg.fillRect(0, 0, 16, 16)
+    g.setTransform(a / 16, b / 16, c / 16, d / 16, e, f)
+    g.drawImage(t, 0, 0)
+  }
+  // Corners: top (64,4), left (4,34), centre (64,64), right (124,34), bottom (64,124)
+  face(left, 0.78, [60, 30, 0, 60, 4, 34])
+  face(right, 0.58, [60, -30, 0, 60, 64, 64])
+  face(top, 1, [60, -30, 60, 30, 4, 34])
+  return out
+}
 
 const norm = (v) => {
   const l = Math.hypot(...v)
