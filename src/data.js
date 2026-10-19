@@ -75,6 +75,18 @@ export const experience = [
 
 export const projects = [
   {
+    title: 'Daily Sales Automation',
+    year: 2026,
+    icon: 'SE',
+    color: '#217346',
+    description:
+      "An internal tool built for the accounting department at Lady Jane's Haircuts for Men. Staff upload the day's transaction report and click one button: the app cleans the data, updates the internal Sales Express workbook for 100+ salons, and builds the three QuickBooks upload files. It drives Microsoft Excel directly so formulas and formatting behave exactly as they do by hand, and checks every file line by line before it can be downloaded, turning a long manual spreadsheet process into a few clicks.",
+    tags: ['Python', 'Streamlit', 'pandas', 'Excel Automation', 'pywin32', 'QuickBooks'],
+    status: 'In Use',
+    github: null,
+    demo: null,
+  },
+  {
     title: 'JD Capital Group Website',
     year: 2026,
     icon: 'JD',
