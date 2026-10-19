@@ -80,8 +80,8 @@ export const projects = [
     icon: 'SE',
     color: '#217346',
     description:
-      "An internal tool built for the accounting department at Lady Jane's Haircuts for Men. Staff upload the day's transaction report and click one button: the app cleans the data, updates the internal Sales Express workbook for 100+ salons, and builds the three QuickBooks upload files. It drives Microsoft Excel directly so formulas and formatting behave exactly as they do by hand, and checks every file line by line before it can be downloaded, turning a long manual spreadsheet process into a few clicks.",
-    tags: ['Python', 'Streamlit', 'pandas', 'Excel Automation', 'pywin32', 'QuickBooks'],
+      "An end-to-end daily sales system built for the accounting department at Lady Jane's Haircuts for Men. I designed the Excel workbooks behind it: a Sales Express workbook that balances every salon's sales, gift cards, fees, and payments across 100+ locations, and three QuickBooks upload workbooks that turn those figures into import-ready journal lines using spill formulas and filters. I then built a Python app on top of them: staff upload the day's transaction report and click one button, and it cleans the data, fills and balances the workbooks through Microsoft Excel itself, and builds all three QuickBooks files. Every file is validated line by line, so each amount lands on the right salon before it can be downloaded. A long manual spreadsheet process now takes a few clicks.",
+    tags: ['Python', 'Streamlit', 'pandas', 'Excel', 'Workbook Design', 'Excel Automation', 'pywin32', 'QuickBooks'],
     status: 'In Use',
     github: null,
     demo: null,
