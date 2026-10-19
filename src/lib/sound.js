@@ -94,3 +94,9 @@ export const playHurt = () => thud({ freq: 220, endFreq: 90, noiseFreq: 700, gai
 
 // Hitting a creature: a quick, punchy smack
 export const playHit = () => thud({ freq: 420, endFreq: 160, noiseFreq: 2200, gain: 0.25, length: 0.12 })
+
+// Digging at a block: a soft, short scrape
+export const playDig = () => thud({ freq: 300, endFreq: 200, noiseFreq: 1500, gain: 0.08, length: 0.07 })
+
+// A block breaking: a crumbly crunch
+export const playBreak = () => thud({ freq: 200, endFreq: 70, noiseFreq: 1800, gain: 0.3, length: 0.2 })

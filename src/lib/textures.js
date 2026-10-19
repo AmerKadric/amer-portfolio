@@ -436,6 +436,38 @@ export function worldTextures(p) {
   }
 }
 
+// The cracks that spread over a block while you dig it: 10 stages, each adding to the last.
+// Cracks wander out from near the middle; every pixel remembers the stage it first shows up in.
+export function crackTextures() {
+  const r = rng(97)
+  const stageOf = new Map()
+  const BRANCHES = 8, STEPS = 11
+  for (let b = 0; b < BRANCHES; b++) {
+    let x = 7.5 + (r() - 0.5) * 3, y = 7.5 + (r() - 0.5) * 3
+    let a = (b / BRANCHES) * Math.PI * 2 + r() * 0.7
+    for (let step = 0; step < STEPS; step++) {
+      if (x < 0 || y < 0 || x >= SIZE || y >= SIZE) break
+      const k = Math.floor(y) * SIZE + Math.floor(x)
+      const stage = Math.floor((step / STEPS) * 10)
+      if (!stageOf.has(k) || stageOf.get(k) > stage) stageOf.set(k, stage)
+      a += (r() - 0.5) * 1.1
+      x += Math.cos(a)
+      y += Math.sin(a)
+    }
+  }
+  return Array.from({ length: 10 }, (_, stage) => {
+    const c = document.createElement('canvas')
+    c.width = c.height = SIZE
+    const g = c.getContext('2d')
+    for (const [k, s] of stageOf) {
+      if (s > stage) continue
+      g.fillStyle = s === stage ? 'rgba(30, 30, 30, 0.55)' : 'rgba(18, 18, 18, 0.8)' // newest cracks are fainter
+      g.fillRect(k % SIZE, Math.floor(k / SIZE), 1, 1)
+    }
+    return c
+  })
+}
+
 const ui = {
   button: () => paint(20, (x, y, r) => shade([112, 112, 112], 0.96 + r() * 0.08)),
 }

@@ -6,8 +6,8 @@
 import { createRenderer, hexColor } from '../lib/gl'
 import { createMobs } from './mobs'
 import { chain, translate, rotateX, rotateY, rotateZ, scale } from '../lib/mat4'
-import { playHit, playHurt } from '../lib/sound'
-import { worldTextures } from '../lib/textures'
+import { playBreak, playDig, playHit, playHurt } from '../lib/sound'
+import { crackTextures, worldTextures } from '../lib/textures'
 import { SUNSET } from '../lib/biomes'
 import {
   planWorld, faceMesher, addPlant, packBuffers, cloudGeometry, toLinear,
@@ -22,6 +22,15 @@ const DAY_SECONDS = 300 // one full day/night cycle
 const GRAVITY = 28
 const JUMP = 8.6
 const WATER_EXIT = 9.6 // enough to clear a one-block bank from the water's surface
+// Seconds to break each block by hand. Close to the game's, but stone-type blocks are much
+// quicker since there's no pickaxe. Plants break instantly; anything unlisted takes 1 s.
+const BREAK_TIME = {
+  glass: 0.45, ice: 0.5, snow: 0.5, leaves: 0.35, birchLeaves: 0.35, darkOakLeaves: 0.35, snowLeaves: 0.35,
+  mushroomCap: 0.3, mushroomStem: 0.3, cactus: 0.6, dirt: 0.75, sand: 0.75, grass: 0.9, snowGrass: 0.9,
+  gravel: 0.9, clay: 0.9, sandstone: 1.2, planks: 1.5, log: 1.5, birchLog: 1.5, darkOakLog: 1.5, pumpkin: 1.5,
+  stone: 2, cobble: 2, mossyCobble: 2, bricks: 2, coalOre: 2.2, ironOre: 2.2,
+}
+const MINE_PAUSE = 0.25 // short wait after a block breaks before the next one starts, like the game
 const WALK = 4.3
 const SPRINT = 6.2
 const PLAYER_W = 0.3 // half width
@@ -383,34 +392,126 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater, onHealth, 
     })
   }
 
-  // Left click / Break: hit a creature if one's in reach and in front of any block, otherwise break the block
+  // Left click / Hit, held down: a creature in reach (and in front of any block) gets hit whenever the
+  // cooldown allows; otherwise the block you're looking at slowly cracks and then breaks
   let attackCooldown = 0
-  function primary() {
-    if (player.dead) return false
-    swing()
+  let mineHeld = false
+  let mining = null // { key, progress } for the block being dug
+  let minePause = 0
+  let digSound = 0
+
+  function attackInFront() {
     const eye = [player.x, player.y + EYE, player.z]
     const hit = mobs.raycast(eye, lookDir(), ATTACK_REACH)
+    if (!hit) return false
     const block = raycast(true)
     const blockDist = block ? Math.hypot(...block.hit.map((c, i) => c - eye[i])) - 0.5 : Infinity
-    if (hit && hit.distance < blockDist) {
-      if (attackCooldown > 0) return false
+    if (hit.distance >= blockDist) return false
+    if (attackCooldown <= 0) {
       attackCooldown = ATTACK_COOLDOWN
       mobs.damage(hit.mob, HOTBAR[selected] === 'ironSword' ? SWORD_DAMAGE : FIST_DAMAGE, player.x, player.z)
       playHit()
-      return true
+      swing()
     }
-    return breakBlock()
+    return true
   }
 
-  function breakBlock() {
+  function setMining(on) {
+    mineHeld = on && !player.dead
+    if (!mineHeld) mining = null
+    else swing()
+  }
+
+  function updateMining(dt) {
+    minePause = Math.max(0, minePause - dt)
+    if (!mineHeld || player.dead) {
+      mining = null
+      return
+    }
+    if (swingTime === 0) swing() // the arm keeps swinging while you dig, like the game
+    if (attackInFront()) {
+      mining = null
+      return
+    }
     const t = raycast()
-    if (!t) return false
-    const [x, y, z] = t.hit
-    if (!inWorld(x, y, z)) return false
+    if (!t || !inWorld(...t.hit) || minePause > 0) {
+      mining = null
+      return
+    }
+    const key = t.hit.join(',')
+    if (mining?.key !== key) mining = { key, progress: 0 } // looked at a different block: start over
+    const name = names[grid[at(...t.hit)]]
+    const time = isPlant(name) ? 0 : BREAK_TIME[name] ?? 1
+    mining.progress += time ? dt / time : 1
+    digSound -= dt
+    if (time && digSound <= 0) {
+      playDig()
+      digSound = 0.24
+    }
+    if (mining.progress >= 1) {
+      breakBlock(t.hit, name)
+      mining = null
+      minePause = MINE_PAUSE
+    }
+  }
+
+  function breakBlock([x, y, z], name) {
     grid[at(x, y, z)] = 0
     if (inWorld(x, y + 1, z) && isPlant(names[grid[at(x, y + 1, z)]])) grid[at(x, y + 1, z)] = 0 // plants fall with their ground
     changed(x, z)
-    return true
+    playBreak()
+    burst([x, y, z], name)
+  }
+
+  // ---------- Cracks and bits of broken block ----------
+  const crackMaps = crackTextures().map((c) => r.texture(c))
+  const crack = { mesh: r.mesh(cubeMesh(1.006, true)), map: crackMaps[0], blend: true, depthWrite: false, offset: [0, 0, 0] }
+
+  const particleMesh = r.mesh(cubeMesh(0.12))
+  const blockColors = {}
+  // Average colour of a block's side texture, in linear light, for its particles
+  function blockColor(name) {
+    if (blockColors[name]) return blockColors[name]
+    const tex = BLOCK_FACES[name]?.[0] ?? name
+    const canvas = sources[tex]?.()
+    let rgb = [0.5, 0.5, 0.5]
+    if (canvas) {
+      const d = canvas.getContext('2d').getImageData(0, 0, 16, 16).data
+      const sum = [0, 0, 0]
+      let n = 0
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] < 128) continue
+        sum[0] += d[i]; sum[1] += d[i + 1]; sum[2] += d[i + 2]; n++
+      }
+      if (n) rgb = sum.map((v) => toLinear(v / n / 255))
+    }
+    return (blockColors[name] = rgb)
+  }
+  let particles = []
+  function burst([x, y, z], name) {
+    const color = blockColor(name)
+    for (let i = 0; i < 14; i++) {
+      const f = 0.75 + Math.random() * 0.4
+      particles.push({
+        item: { mesh: particleMesh, tint: color.map((c) => c * f), offset: [x + (Math.random() - 0.5) * 0.7, y + (Math.random() - 0.5) * 0.7, z + (Math.random() - 0.5) * 0.7] },
+        v: [(Math.random() - 0.5) * 3, 1.5 + Math.random() * 2.5, (Math.random() - 0.5) * 3],
+        life: 0.5 + Math.random() * 0.5,
+      })
+    }
+  }
+  function updateParticles(dt) {
+    for (const p of particles) {
+      p.life -= dt
+      p.v[1] -= GRAVITY * 0.6 * dt
+      const o = p.item.offset
+      const next = o.map((c, i) => c + p.v[i] * dt)
+      if (blocks(cell(next[0]), cell(next[1] - 0.06), cell(next[2]))) {
+        p.v = [p.v[0] * 0.4, 0, p.v[2] * 0.4] // land and slide to a stop
+      } else {
+        o[0] = next[0]; o[1] = next[1]; o[2] = next[2]
+      }
+    }
+    particles = particles.filter((p) => p.life > 0)
   }
 
   function placeBlock() {
@@ -565,6 +666,8 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater, onHealth, 
     if (!player.dead) step(dt)
     heal(dt)
     attackCooldown = Math.max(0, attackCooldown - dt)
+    updateMining(dt)
+    updateParticles(dt)
     dayTime = (dayTime + dt / DAY_SECONDS) % 1
 
     const eye = [player.x, player.y + EYE, player.z]
@@ -586,7 +689,15 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater, onHealth, 
     target = t?.hit ?? null
     if (target) outline.offset = target
     if (itemsDirty) collectItems()
-    view.items = [...before, ...mobs.items(), ...after, ...(target ? [outline] : [])]
+    const cracking = mining && target && mining.key === target.join(',') && mining.progress > 0
+    if (cracking) {
+      crack.offset = target
+      crack.map = crackMaps[Math.min(9, Math.floor(mining.progress * 10))]
+    }
+    view.items = [
+      ...before, ...mobs.items(), ...particles.map((p) => p.item), ...after,
+      ...(target ? [outline] : []), ...(cracking ? [crack] : []),
+    ]
     view.overlay = handOverlay(dt)
 
     onUnderwater?.(isWater(cell(eye[0]), cell(eye[1]), cell(eye[2])))
@@ -604,7 +715,7 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater, onHealth, 
       selected = ((i % HOTBAR.length) + HOTBAR.length) % HOTBAR.length
       return selected
     },
-    primary,
+    setMining,
     placeBlock,
     respawn,
     hotbarIcons: () =>
@@ -621,6 +732,23 @@ export function createGame(canvas, { biomeId, time }, { onUnderwater, onHealth, 
 }
 
 // ---------- Geometry helpers ----------
+
+// A cube centred on the origin: textured (uv, plain white) for the crack overlay,
+// or shaded per face for the little bits that fly off a broken block
+function cubeMesh(size, textured = false) {
+  const pos = [], uv = [], col = [], idx = []
+  FACE_DATA.forEach(({ corners }, f) => {
+    const start = pos.length / 3
+    const v = textured ? 1 : toLinear(FACES[f].shade)
+    for (const { p, uv: u } of corners) {
+      pos.push((p[0] - 0.5) * size, (p[1] - 0.5) * size, (p[2] - 0.5) * size)
+      uv.push(u[0], u[1])
+      col.push(v, v, v)
+    }
+    idx.push(start, start + 1, start + 2, start, start + 2, start + 3)
+  })
+  return { pos: new Float32Array(pos), uv: new Float32Array(uv), col: new Float32Array(col), idx: new Uint32Array(idx) }
+}
 
 // A block as the inventory shows it: a little 3D cube with a lit top and two shaded sides
 function blockIcon(top, left, right) {

@@ -102,12 +102,12 @@ export default function Game({ scene, onExit }) {
     if (touch) return
     const canvas = canvasRef.current
     const held = new Set()
-    let breakTimer = null, placeTimer = null
+    let placeTimer = null
     const active = () => document.pointerLockElement === canvas || (freeMouse.current && !pausedRef.current)
     const stopAll = () => {
       held.clear()
       updateMove()
-      clearInterval(breakTimer)
+      gameRef.current?.setMining(false)
       clearInterval(placeTimer)
     }
 
@@ -150,11 +150,11 @@ export default function Game({ scene, onExit }) {
     }
     const onMouseDown = (e) => {
       if (!active() || e.target !== canvas) return
-      if (e.button === 0) breakTimer = repeat(() => gameRef.current?.primary())
+      if (e.button === 0) gameRef.current?.setMining(true)
       if (e.button === 2) placeTimer = repeat(() => gameRef.current?.placeBlock())
     }
     const onMouseUp = (e) => {
-      if (e.button === 0) clearInterval(breakTimer)
+      if (e.button === 0) gameRef.current?.setMining(false)
       if (e.button === 2) clearInterval(placeTimer)
     }
     const onWheel = (e) => {
@@ -185,7 +185,6 @@ export default function Game({ scene, onExit }) {
       document.removeEventListener('wheel', onWheel)
       document.removeEventListener('pointerlockchange', onLockChange)
       canvas.removeEventListener('contextmenu', noMenu)
-      clearInterval(breakTimer)
       clearInterval(placeTimer)
       if (document.pointerLockElement === canvas) document.exitPointerLock()
     }
@@ -294,6 +293,17 @@ export default function Game({ scene, onExit }) {
     }
   }
   useEffect(() => () => Object.values(repeatTimers.current).forEach(clearInterval), [])
+  // Hold Hit to dig (or keep attacking), let go to stop
+  const stopMining = () => gameRef.current?.setMining(false)
+  const holdMine = {
+    onPointerDown: (e) => {
+      e.preventDefault()
+      gameRef.current?.setMining(true)
+    },
+    onPointerUp: stopMining,
+    onPointerCancel: stopMining,
+    onPointerLeave: stopMining,
+  }
 
   return (
     <div className={`game${touch ? ' touch' : ''}`}>
@@ -343,7 +353,7 @@ export default function Game({ scene, onExit }) {
             <div className="game-knob" style={{ transform: `translate(${knob[0]}px, ${knob[1]}px)` }} />
           </div>
           <div className="game-buttons">
-            <button type="button" className="mc-btn game-btn" {...tapRepeat('primary')} aria-label="Break block or attack">Hit</button>
+            <button type="button" className="mc-btn game-btn" {...holdMine} aria-label="Break block or attack">Hit</button>
             <button type="button" className="mc-btn game-btn" {...tapRepeat('placeBlock')} aria-label="Place block">Place</button>
             <button type="button" className="mc-btn game-btn jump" {...hold('jump')} aria-label="Jump">Jump</button>
           </div>
@@ -368,14 +378,14 @@ export default function Game({ scene, onExit }) {
               <>
                 <li>Left stick: walk (push far to sprint)</li>
                 <li>Drag the right side: look around</li>
-                <li>Hit (attack or break) / Place / Jump buttons</li>
+                <li>Hit (attack, or hold to mine) / Place / Jump buttons</li>
                 <li>Zombies come out at night: keep your sword ready</li>
                 <li>Tap the hotbar to choose a block</li>
               </>
             ) : (
               <>
                 <li>Mouse: look · WASD: move · Space: jump · Shift: sprint</li>
-                <li>Left click: attack / break · Right click: place</li>
+                <li>Left click: attack · hold to mine · Right click: place</li>
                 <li>Zombies come out at night: keep your sword ready (slot 1)</li>
                 <li>1–9 or scroll: choose a block · Esc: pause</li>
               </>
