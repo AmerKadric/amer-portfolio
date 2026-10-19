@@ -92,8 +92,8 @@ export const projects = [
     icon: 'JD',
     color: '#b6903f',
     description:
-      'A complete rebuild of the live website for JD Capital Group, a business consulting and growth advisory firm in Birmingham, Michigan. Built from scratch in HTML, CSS, and JavaScript with a custom client-side router for smooth page transitions and clean URLs, plus photo-carousel and video case studies, a client showcase, and a working contact form.',
-    tags: ['HTML', 'CSS', 'JavaScript', 'Responsive Design', 'Vercel'],
+      'A complete rebuild of the live website for JD Capital Group, a business consulting and growth advisory firm in Birmingham, Michigan. Built from scratch in plain HTML, CSS, and JavaScript with no framework or build step: every page is a real, directly loadable document, and a custom client-side router layers app-like navigation on top. It swaps only the page content so the header never reloads, prefetches pages on hover, waits for styles and first images so nothing flashes unstyled, serves clean URLs through Vercel, and falls back to a normal page load if anything fails. The site includes case studies with photo carousels, a lightbox, and video walkthroughs, a filterable client showcase, an interactive services explorer, a serverless contact form via Web3Forms, self-hosted variable fonts, and Open Graph previews for shared links.',
+    tags: ['HTML', 'CSS', 'JavaScript', 'Client-Side Routing', 'Responsive Design', 'Web3Forms', 'Vercel'],
     status: 'Live',
     github: 'https://github.com/AmerKadric/jd-capital-group-redesign',
     demo: 'https://jd-capitalgrp.com',
@@ -104,7 +104,7 @@ export const projects = [
     icon: 'CP',
     color: '#2f6f9f',
     description:
-      'The COP-C Project is a project submitted to the National Security Innovation Network. This project leverages artificial intelligence (AI) and machine learning (ML) to enhance battlefield communication by digitizing information received through voice and text channels. The solution addresses the critical issue of integrating alternative communication mechanisms into digital workflows, thereby improving situational awareness and information dissemination across military units.',
+      'The COP-C Project is a project submitted to the National Security Innovation Network. It applies artificial intelligence (AI) and machine learning (ML) to battlefield communication, digitizing information that arrives through voice and text channels so it can flow into digital workflows. Our team built an Android application in Kotlin and Java backed by a multi-agent system of machine learning models: speech recognition turns voice messages into text, natural language processing and named-entity recognition (NER) pull the key details out of each message, and the results are organized into structured, actionable reports. The models run on-device with TensorFlow Lite, messages are stored locally in RealmDB, and biometric authentication protects access to the data. The result improves situational awareness and information dissemination across military units. I designed and built front-end features and UI/UX improvements, handled testing, debugging, and performance tuning, and wrote the system design and requirements documentation.',
     tags: ['Android Studio', 'Kotlin', 'Java', 'Python', 'TensorFlow Lite', 'AI/ML', 'NLP / NER', 'RealmDB', 'Biometric Auth'],
     status: 'Completed',
     github: null,
@@ -116,8 +116,8 @@ export const projects = [
     icon: 'AK',
     color: '#5d8f3a',
     description:
-      'This site — a Minecraft-style title screen with a procedurally generated, rotating 3D voxel world drawn with a custom WebGL renderer. No game assets used.',
-    tags: ['React', 'Vite', 'WebGL', 'Web Workers', 'Web Audio', 'Vercel'],
+      'This site: a Minecraft-style title screen over a procedurally generated, rotating 3D voxel world, with no game assets used. Five biomes are generated from seeded noise in a Web Worker, meshed so only visible faces are drawn, and shaded with per-vertex ambient occlusion. Everything is rendered by a custom WebGL2 renderer I wrote in place of three.js, with procedurally painted pixel-art textures, fog, day and sunset lighting, and an instant first paint. Sounds are synthesized live with the Web Audio API, and the site has advancement toasts, saved settings, and a passcode gate. Hidden inside is a playable first-person game: walk, swim, mine and place blocks, fight zombies at night with an iron sword, and survive a full day/night cycle with hearts, fall damage, and wandering animals, on desktop or with touch controls on a phone.',
+    tags: ['React', 'Vite', 'WebGL2', 'Procedural Generation', 'Web Workers', 'Web Audio', 'Game Dev', 'Vercel'],
     status: 'Deployed',
     github: 'https://github.com/AmerKadric/amer-portfolio',
     demo: null,
