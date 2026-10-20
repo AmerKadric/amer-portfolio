@@ -75,6 +75,18 @@ export const experience = [
 
 export const projects = [
   {
+    title: 'Salon Analytics Dashboard',
+    year: 2026,
+    icon: 'SA',
+    color: '#1e3a5f',
+    description:
+      "An executive analytics dashboard built for Lady Jane's Haircuts for Men that turns the company's year-to-date Salon Service Analytics report into an eleven-page, interactive decision tool covering 100+ salons. Built in Python with Streamlit, pandas, and Plotly, it parses and validates the raw point-of-sale export, reconciles recalculated totals against the source's own company totals, and keeps original and derived figures strictly separated. Pages include an executive command center, a salon explorer with percentile ranks and radar charts, side-by-side comparison of up to five salons, leaderboards, a US state choropleth with drill-down, service attachment and customer-mix analytics, and a year-over-year waterfall bridge. Haircut-weighted rates, a composite performance index, and an opportunity score that sizes each salon's service gap against the network median feed a rule-based insights engine. Shared filters apply across every page, and a data manager validates new uploads, flags missing or duplicate salons, and exports to CSV and Excel.",
+    tags: ['Python', 'Streamlit', 'pandas', 'Plotly', 'NumPy', 'Data Analytics', 'Data Validation', 'Excel Export'],
+    status: 'In Use',
+    github: null,
+    demo: null,
+  },
+  {
     title: 'Daily Sales Automation',
     year: 2026,
     icon: 'SE',
